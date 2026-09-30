@@ -1,4 +1,4 @@
-# X Pulse — 01Edu query pack
+# Nextera Pulse — 01Edu query pack
 # Event 97 is the main curriculum event.
 # Pilot cohort label: "01 Coding - Second Cohort"
 
@@ -28,10 +28,6 @@ query PulsePilotEventUsers($eventId: Int!) {
     createdAt
     level
     userAuditRatio
-    cohorts {
-      # TODO-SCHEMA-CONFIRM: request the label identifier/name fields exposed on label_user.
-      # Expected relationship shape is label -> { id name } or equivalent.
-    }
   }
 }
 
