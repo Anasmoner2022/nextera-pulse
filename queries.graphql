@@ -1,0 +1,129 @@
+# X Pulse — 01Edu query pack
+# Event 97 is the main curriculum event.
+# Pilot cohort label: "01 Coding - Second Cohort"
+
+query PulseEventConfig($eventId: Int!) {
+  event_by_pk(id: $eventId) {
+    id
+    path
+    startAt
+    endAt
+    object {
+      id
+      name
+      type
+      attrs
+    }
+  }
+}
+
+# Root schema confirms event_user.cohorts is a label_user relation and label_user is queryable.
+# The exact label_user field names (label/name/id relation shape) must be confirmed once
+# against the live schema before freezing the production cohort query.
+query PulsePilotEventUsers($eventId: Int!) {
+  event_user(where: {eventId: {_eq: $eventId}}) {
+    id
+    userId
+    userLogin
+    createdAt
+    level
+    userAuditRatio
+    cohorts {
+      # TODO-SCHEMA-CONFIRM: request the label identifier/name fields exposed on label_user.
+      # Expected relationship shape is label -> { id name } or equivalent.
+    }
+  }
+}
+
+query PulseProgressSince($eventId: Int!, $since: timestamptz!, $limit: Int!, $offset: Int!) {
+  progress(
+    where: {
+      eventId: {_eq: $eventId}
+      updatedAt: {_gt: $since}
+    }
+    order_by: [{updatedAt: asc}, {id: asc}]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    userId
+    eventId
+    objectId
+    groupId
+    path
+    createdAt
+    updatedAt
+    gradedAt
+    isDone
+    grade
+    group {
+      startedWorkingAt
+      status
+    }
+  }
+}
+
+query PulseTransactionsSince($eventId: Int!, $since: timestamptz!, $limit: Int!, $offset: Int!) {
+  transaction(
+    where: {
+      eventId: {_eq: $eventId}
+      createdAt: {_gt: $since}
+    }
+    order_by: [{createdAt: asc}, {id: asc}]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    userId
+    eventId
+    objectId
+    auditId
+    path
+    type
+    amount
+    isBonus
+    createdAt
+    invalidatedAt
+  }
+}
+
+query PulseRecordsForUsers($userIds: [Int!]!, $limit: Int!, $offset: Int!) {
+  record(
+    where: {userId: {_in: $userIds}}
+    order_by: [{updatedAt: asc}, {id: asc}]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    userId
+    typeName
+    message
+    startAt
+    endAt
+    createdAt
+    updatedAt
+  }
+}
+
+query PulseAuditsSince($since: timestamptz!, $limit: Int!, $offset: Int!) {
+  audit(
+    where: {updatedAt: {_gt: $since}}
+    order_by: [{updatedAt: asc}, {id: asc}]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    auditorId
+    groupId
+    resultId
+    auditType
+    createdAt
+    auditedAt
+    closedAt
+    endAt
+    grade
+    closureType
+    automated
+    updatedAt
+  }
+}
