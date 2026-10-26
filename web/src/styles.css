@@ -47,7 +47,9 @@ a {
   padding:25px 17px 15px;
   display:flex;
   flex-direction:column;
-  z-index:2
+  z-index:2;
+  overflow-y:auto;
+  scrollbar-width:thin;
 }
 html[dir=rtl] .sidebar {
   inset:0 0 0 auto;
@@ -1207,3 +1209,24 @@ html[dir=rtl] th:first-child,html[dir=rtl] td:first-child {
     padding-right:13px
   }
 }
+
+.topbar-signout-btn {
+  font-size:12px;
+  padding:5px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--text);
+  font-weight:600;
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  transition:all 0.15s ease;
+}
+.topbar-signout-btn:hover {
+  background:color-mix(in srgb,#e44b36 12%,var(--surface));
+  color:#e44b36;
+  border-color:#e44b36;
+}
+
