@@ -7,6 +7,10 @@
 bin/
 coverage.out
 *.test
+/api
+/api.exe
+/worker
+/worker.exe
 
 # Node
 node_modules/
