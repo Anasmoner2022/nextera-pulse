@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "type-check": "tsc -b --noEmit",
     "test": "node src/accountPersistence.test.mjs && node src/studentAccountLink.test.mjs && node src/studentAccess.test.mjs && node src/studentRecordSync.test.mjs && node src/studentMetrics.test.mjs",
     "preview": "vite preview"
   },
