@@ -9,7 +9,7 @@ import type { Intervention, Language } from '../config';
 
 export function Stat({ icon, label, value, foot, color }: { icon: string; label: string; value: number; foot: string; color: string ;}) { return <article className="stat-card"><div className={`stat-icon ${color}`}>{icon}</div><span className="stat-label">{label}</span><strong>{value}</strong><small>{foot}</small><span className="stat-spark">⌁</span></article> ;}
 
-export function ManagerOverview({ mentors, rows, interventions, lang, onOpenTeam }: { mentors: PulseAccount[]; rows: StudentPaceRow[]; interventions: Intervention[]; lang: Language; onOpenTeam?: () => void ;}) {
+export function ManagerOverview({ mentors, rows, interventions, lang, onOpenTeam, onOpenMentor }: { mentors: PulseAccount[]; rows: StudentPaceRow[]; interventions: Intervention[]; lang: Language; onOpenTeam?: () => void; onOpenMentor?: (mentor: PulseAccount) => void ;}) {
   const ar = lang === 'ar';
   const assigned = new Set(mentors.flatMap(mentor => mentor.assignedStudentLogins ?? []).map(normalizeLogin));
   const unassigned = rows.filter(row => !assigned.has(normalizeLogin(row.login)));
@@ -38,6 +38,7 @@ export function ManagerOverview({ mentors, rows, interventions, lang, onOpenTeam
         <div className="manager-mentor-head"><ProfileAvatar account={mentor} size="medium" /><div><b>{mentor.name}</b><small>{mentor.email}</small></div><span className="manager-track-rate">{onTrackRate}%<small>{ar ? 'على المسار' : 'on track'}</small></span></div>
         <div className="manager-load-label"><span>{ar ? 'توزيع الطلاب' : 'Student load'}</span><b>{assignedRows.length} / {mentor.capacityLimit ?? '—'}</b></div><div className="manager-load-track"><i style={{ width: `${load}%` }} /></div>
         <div className="manager-mentor-stats"><div><small>{ar ? 'طلاب على المسار' : 'On track'}</small><b>{onTrack}</b></div><div><small>{ar ? 'محتاجين متابعة' : 'Need attention'}</small><b>{attention}</b></div><div><small>{ar ? 'متابعات' : 'Follow-ups'}</small><b>{followUps}</b></div></div>
+        {onOpenMentor && <button type="button" className="mentor-open-workspace" onClick={() => onOpenMentor(mentor)}>{ar ? 'فتح مساحة المنتور' : 'Open mentor workspace'} <span aria-hidden="true">→</span></button>}
       </article>;
     })}{mentors.length === 0 && <div className="empty-state"><b>{ar ? 'لا توجد حسابات منتورز حتى الآن' : 'No mentor accounts yet.'}</b></div>}</div>
     <p className="manager-footnote">{ar ? 'المنتور يطّلع على طلابه المسندين فقط. البيانات هنا ملخصة على مستوى البرنامج.' : 'Mentors only see their assigned students. This view summarizes the whole program.'}</p>

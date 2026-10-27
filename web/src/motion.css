@@ -1203,6 +1203,41 @@ to {
 .mentor-picker-load.is-full { color:#bd7446; }
 .mentor-picker-check { display:grid; flex:0 0 18px; place-items:center; width:18px; height:18px; border-radius:50%; background:var(--accent); color:white; font-size:11px; }
 .mentor-picker-empty { margin:0; padding:14px 10px; color:var(--muted); font-size:10px; text-align:center; }
+
+/* Read-only workspace previews let mentors review one another's assigned cohorts. */
+.mentor-open-workspace { display:flex; align-items:center; justify-content:space-between; width:100%; margin-top:14px; padding:10px 12px; border:1px solid color-mix(in srgb,var(--accent) 24%,var(--line)); border-radius:10px; background:color-mix(in srgb,var(--accent) 7%,var(--surface)); color:var(--accent-strong); font:700 11px Manrope,'Cairo',sans-serif; cursor:pointer; transition:background 180ms ease,transform 180ms ease,border-color 180ms ease; }
+.mentor-open-workspace:hover { transform:translateY(-1px); border-color:var(--accent); background:color-mix(in srgb,var(--accent) 13%,var(--surface)); }
+.mentor-workspace-view { display:grid; gap:18px; }
+.mentor-workspace-hero { padding:clamp(20px,3vw,32px); }
+.mentor-workspace-topline { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:24px; }
+.mentor-workspace-identity { display:flex; align-items:center; gap:18px; min-width:0; }
+.mentor-workspace-identity>.profile-avatar { flex:0 0 76px; width:76px; height:76px; }
+.mentor-workspace-identity>div { min-width:0; }
+.mentor-workspace-identity h2 { margin:5px 0; color:var(--text); font-size:clamp(21px,3vw,30px); }
+.mentor-workspace-identity p { margin:0; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+.mentor-workspace-capacity { display:grid; justify-items:end; margin-inline-start:auto; color:var(--text); font-size:26px; font-weight:800; }
+.mentor-workspace-capacity small { color:var(--muted); font-size:10px; font-weight:600; }
+.mentor-workspace-quote { margin:22px 0 0; padding:14px 17px; border-inline-start:3px solid var(--accent); border-radius:0 12px 12px 0; background:var(--soft); color:var(--text); font-size:13px; }
+.mentor-workspace-permissions { display:grid; gap:10px; margin-top:22px; }
+.mentor-workspace-permissions>b { color:var(--text); font-size:12px; }
+.mentor-workspace-permissions>div { display:flex; flex-wrap:wrap; gap:8px; }
+.mentor-workspace-permissions span { padding:7px 10px; border:1px solid var(--line); border-radius:999px; background:var(--surface); color:var(--muted); font-size:10px; }
+.mentor-workspace-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.mentor-workspace-metrics article { display:grid; gap:8px; padding:17px; border:1px solid var(--line); border-radius:14px; background:var(--surface); box-shadow:0 8px 24px rgb(20 51 46 / 4%); }
+.mentor-workspace-metrics small { color:var(--muted); font-size:11px; }
+.mentor-workspace-metrics strong { color:var(--text); font:800 25px Manrope,'Cairo',sans-serif; }
+.mentor-workspace-roster,.mentor-workspace-followups { min-width:0; overflow:hidden; }
+.mentor-workspace-followup-list { display:grid; }
+.mentor-workspace-followup-list article { display:flex; align-items:flex-start; gap:12px; padding:15px 20px; border-top:1px solid var(--line); }
+.mentor-workspace-followup-list article>.profile-avatar { flex:0 0 36px; width:36px; height:36px; }
+.mentor-workspace-followup-list article>div { display:grid; flex:1; min-width:0; gap:7px; }
+.mentor-workspace-followup-list article button { justify-self:start; padding:0; border:0; background:none; color:var(--text); font:700 12px Manrope,'Cairo',sans-serif; cursor:pointer; }
+.mentor-workspace-followup-list article p { margin:0; color:var(--text); font-size:12px; line-height:1.65; overflow-wrap:anywhere; }
+.mentor-workspace-followup-list article small { display:flex; flex-wrap:wrap; gap:9px; color:var(--muted); font-size:10px; }
+.mentor-workspace-empty { margin:0; padding:22px; color:var(--muted); font-size:12px; }
+html[data-theme="dark"] .mentor-workspace-metrics article { box-shadow:none; }
+@media(max-width:760px) { .mentor-workspace-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } .mentor-workspace-identity { align-items:flex-start; flex-wrap:wrap; } .mentor-workspace-capacity { font-size:22px; } }
+@media(max-width:420px) { .mentor-workspace-metrics { gap:8px; } .mentor-workspace-metrics article { padding:13px; } .mentor-workspace-topline { align-items:flex-start; flex-direction:column; } }
 .team-roster-empty { display:grid; justify-items:center; gap:5px; padding:30px 14px; color:var(--muted); text-align:center; }
 .team-roster-empty b { color:var(--text); font-size:12px; }
 .team-roster-empty span { font-size:10px; }
@@ -1492,3 +1527,18 @@ html[data-theme="dark"] .student-home > .student-metrics > div { background:line
   .student-home > .student-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .student-home > .student-metrics > div:last-child { grid-column:1/-1; }
 }
+
+.acting-as-banner {
+  display:flex; align-items:center; justify-content:space-between; gap:18px;
+  margin:0 0 22px; padding:16px 18px; border:1px solid color-mix(in srgb,var(--accent-strong) 28%,var(--line));
+  border-radius:16px; background:linear-gradient(110deg,color-mix(in srgb,var(--accent-strong) 12%,var(--surface)),var(--surface));
+  box-shadow:0 8px 24px rgb(18 97 78 / 8%);
+}
+.acting-as-banner > span { display:grid; gap:4px; min-width:0; }
+.acting-as-banner b { color:var(--accent-strong); font-size:14px; }
+.acting-as-banner small { color:var(--muted); font-size:12px; line-height:1.5; }
+.acting-as-banner button { flex:none; border:1px solid var(--line); border-radius:10px; padding:10px 13px; background:var(--surface); color:var(--text); font:inherit; font-weight:700; cursor:pointer; }
+.acting-as-banner button:hover { border-color:var(--accent-strong); color:var(--accent-strong); }
+.intervention-operator { display:inline-flex; margin-inline-start:8px; color:var(--accent-strong); font-size:11px; font-weight:700; }
+.mentor-workspace-topline .primary-button { white-space:nowrap; }
+@media(max-width:560px) { .acting-as-banner { align-items:stretch; flex-direction:column; } .acting-as-banner button { align-self:flex-start; } }
