@@ -1,0 +1,371 @@
+================================================================================
+NEXTERA PULSE — BACKEND & PACE ENGINE HANDOVER SPECIFICATION FOR CODEX
+================================================================================
+Generated: 2026-10-22
+Author / Lead Role: Sohila (Backend / Data Engineering)
+Component: Nextera Pulse Core API, Data Layer, Pace Engine, Ingestion Pipeline
+Target Pilot: Event 97, Cohort 4 ("01 Coding - Second Cohort")
+Source Database: PostgreSQL 16 (database: nextera_pulse)
+Target Consumers: Ziad (React Frontend), Anas (Product Owner), Shahd (Tech Lead)
+Repository Path: C:\Users\Yoga\Desktop\nextera-pulse\
+================================================================================
+
+1. EXECUTIVE OVERVIEW & PROBLEM STATEMENT
+--------------------------------------------------------------------------------
+Nextera Pulse is an operational Student Success and Learning Intelligence system
+built to monitor student progress in 01Edu/01NextEra. 01Edu holds the raw learning
+data (levels, XP, progress, audits, checkpoints, status records), but lacks the
+operational intelligence to tell mentors:
+  (1) Who is on track?
+  (2) Who is drifting or falling behind?
+  (3) What is the exact reason?
+  (4) What intervention should be taken?
+
+The North Star Metric for the project is the "On-Track Rate" (% of students at
+or above the configured minimum level for their active curriculum month).
+
+Sprint 1's goal is "Trust Pace": Prove that for the pilot cohort (Cohort 4,
+Event 97, 52 students), the system can accurately and deterministically compute
+active curriculum days, curriculum month, target levels, gap calculations, and
+pace status (GREEN / YELLOW / RED / PAUSED / ONBOARDING), and expose this to
+Ziad's React frontend via a clean REST API.
+
+
+2. ARCHITECTURE & CURRENT TECH STACK
+--------------------------------------------------------------------------------
+- Language: Go 1.22+ (using native net/http routing introduced in Go 1.22)
+- Database: PostgreSQL 16 (native target via github.com/lib/pq)
+            Fallback SQLite support (modernc.org/sqlite) is maintained in the
+            store layer for zero-dependency local testing.
+- Architecture: Domain-driven design following the Technical Specification v0.2:
+  * cmd/api/main.go            -> HTTP REST API server
+  * cmd/seed/main.go           -> Archive Ingestion & Pace Snapshot generator CLI
+  * internal/model/types.go    -> Core domain entities and API DTOs
+  * internal/pace/engine.go    -> Deterministic Pace Engine
+  * internal/pace/engine_test.go -> Pace Engine mathematical unit tests
+  * internal/store/db.go       -> DB connection & driver detection
+  * internal/store/migrations.go -> SQL migration & policy/milestone seeders
+  * internal/store/student_store.go -> Queries, upserts, snapshots, aggregates
+  * internal/store/time.go     -> RFC3339 timestamp normalizer
+  * internal/sync/loader.go    -> Zip archive parser and ingestion pipeline
+  * internal/httpapi/server.go -> HTTP handlers, CORS middleware, response envelopes
+  * migrations/postgres.sql    -> PostgreSQL DDL
+  * migrations/sqlite.sql      -> SQLite DDL
+  * Dockerfile                 -> Multi-stage production container build
+  * docker-compose.yml         -> PostgreSQL 16 + API orchestration
+
+
+3. BYPASSING THE GRAPHQL SYNC WORKER VIA ANAS'S EXPORT
+--------------------------------------------------------------------------------
+Instead of writing a network scraper/poller requiring live 01Edu session cookies
+or Hasura secrets for Sprint 1, Anas extracted a complete export from the signed-in
+GraphQL console on 2026-10-19:
+  File: NextEra-All-Cohorts-2026-10-19.zip (19.5 MB)
+
+Inside the zip:
+  * Cohort-4-Roster.csv: 52 students in Event 97 ("01 Coding - Second Cohort")
+  * All-Cohorts-Roster.csv: 146 unique students (Cohort 1 + Cohort 4)
+  * Cohort-4-Data.json: Grouped JSON for Cohort 4
+  * json/record.json: Administrative records (blocked-long, away, etc.)
+  * json/event.json: Event 97 metadata
+
+The ingestion loader (internal/sync/loader.go) reads this archive and performs:
+  1. Ingestion of Event 97 configuration into source_events.
+  2. Batch upsert of all 146 students into students and student_events.
+  3. Ingestion of status records into student_source_records.
+  4. Seed of default mentor assignments.
+  5. Deterministic evaluation of each student's pace via the Pace Engine.
+  6. Generation of daily immutable snapshots in student_metric_snapshots.
+
+
+4. LOCKED BUSINESS RULES & PACE ENGINE FORMULAS
+--------------------------------------------------------------------------------
+(A) Clock Anchor:
+    The student's academic clock starts at event_user.createdAt (the joinedAt
+    column in the roster). event.endAt is NEVER used for pacing.
+
+(B) Status Policy (status_policy table):
+    +------------------+-------------+-------------------------+
+    | Record Type      | Pause Clock | Exclude from Active KPI |
+    +------------------+-------------+-------------------------+
+    | away             | false       | false                   |
+    | restricted       | true        | true                    |
+    | blocked-long     | true        | true                    |
+    | temporary-notice | false       | false                   |
+    | left-school      | true (term) | true                    |
+    | observation      | false       | false                   |
+    | ban              | true        | true                    |
+    +------------------+-------------+-------------------------+
+
+(C) Active Program Days & Curriculum Month:
+    pause_days = SUM(overlap_days(status_interval, enrolled_at .. now))
+                 WHERE status_policy.pause_clock = true
+    active_program_days = MAX(0, FLOOR(now - enrolled_at) - pause_days)
+    curriculum_month = FLOOR(active_program_days / 30) + 1
+
+(D) Official Event 97 Curriculum Timeline (curriculum_timeline table):
+    Month  2:  Min 5.0,   Expected  7.0,  Checkpoint 0
+    Month  4:  Min 9.0,   Expected 13.0,  Checkpoint 0
+    Month  5:  Min 12.0,  Expected 17.0,  Checkpoint 10
+    Month  6:  Min 15.0,  Expected 18.0,  Checkpoint 20
+    Month  7:  Min 17.0,  Expected 20.0,  Checkpoint 20
+    Month  8:  Min 20.0,  Expected 23.0,  Checkpoint 30
+    Month 10:  Min 28.0,  Expected 34.0,  Checkpoint 30
+    Month 12:  Min 34.0,  Expected 38.0,  Checkpoint 40
+    Month 18:  Min 50.0,  Expected 62.0,  Checkpoint 50
+
+(E) Deterministic Status Evaluation:
+    - If left_school: state = INACTIVE
+    - Else if currently_paused: state = PAUSED (Reason: ADMINISTRATIVE_PAUSE)
+    - Else if curriculum_month == 1: state = ONBOARDING (first 30 days)
+    - Else if actual_level >= expected_level: state = GREEN
+    - Else if actual_level >= min_level: state = YELLOW (Reason: PACE_BELOW_TARGET)
+    - Else (actual_level < min_level): state = RED (Reason: PACE_BELOW_MINIMUM)
+
+(F) Gaps:
+    gap_to_minimum  = actual_level - target.min_level
+    gap_to_expected = actual_level - target.expected_level
+
+
+5. WHAT WAS ACCOMPLISHED & VERIFIED (SPRINT 1 TICKETS)
+--------------------------------------------------------------------------------
+All core backend tickets assigned to Sohila are complete:
+- [x] NP-001: Project structure, domain packages, Docker, .gitignore, Git repo.
+- [x] NP-002: PostgreSQL 16 schema + migrations (postgres.sql).
+- [x] NP-004: Event 97 config & official timeline milestone persistence.
+- [x] NP-005: Second Cohort students synced from Anas's export into PostgreSQL.
+- [x] NP-006: Status-policy table seeded with locked pause/exclusion rules.
+- [x] NP-007: Active program age calculation with pause overlap logic.
+- [x] NP-008: Deterministic Pace Engine with unit tests.
+- [x] NP-009: Daily metric snapshots engine (student_metric_snapshots).
+- [x] NP-010: Student pace REST API with CORS for Ziad's frontend.
+- [x] NP-013: Automated end-to-end API test suite (test_api.py).
+
+Live Database Numbers (Cohort 4 - Second Cohort, 52 Students):
+  * Total Students: 52
+  * Active Students: 51
+  * Paused Students: 1 (egaber / userId 943 is PAUSED due to blocked-long record)
+  * Onboarding Students: 11 (joined Oct 2026, active age <= 30 days)
+  * Off-Track Students (RED): 40 (joined 5-7 months ago, level < month 5-7 min)
+  * On-Track Rate (North Star): 0% (accurately reflects that students are behind)
+
+
+6. TECHNICAL PITFALLS & ISSUES RESOLVED (THE "FAILED" PARTS)
+--------------------------------------------------------------------------------
+Be aware of these 6 critical issues that were encountered and resolved during
+implementation so CODEX does not re-introduce them:
+
+(1) UTF-8 Byte Order Mark (BOM) in CSV Files:
+    - Problem: Cohort-4-Roster.csv starts with \xef\xbb\xbf.
+    - Error: Go's encoding/csv threw 'parse error on line 1, column 4: bare " in non-quoted-field'.
+    - Fix: Added bytes.TrimPrefix(content, []byte("\xef\xbb\xbf")) before feeding
+      into csv.NewReader.
+
+(2) "Infinity" Values in JSON Serialization:
+    - Problem: Student Mina Fayeq (ID 636) has auditRatio = "Infinity" in 01Edu.
+    - Error: strconv.ParseFloat parsed this into float64(+Inf). In Go,
+      encoding/json returns 'json: unsupported value: +Inf'. When writeJSON was
+      called, w.WriteHeader(200) was sent first, but json.Encode failed mid-stream,
+      resulting in an empty 0-byte HTTP response body.
+    - Fix: Added math.IsInf(val, 0) and math.IsNaN(val) guards, clamping invalid
+      ratios to 0.0. Also changed writeJSON to buffer-serialize first.
+
+(3) PostgreSQL Boolean vs. Integer Type Strictness:
+    - Problem: In SQLite, boolean flags can be queried as is_primary = 1.
+    - Error: PostgreSQL strictly requires booleans; threw 'operator does not exist:
+      boolean = integer (42883)'.
+    - Fix: Changed all queries to 'm.is_primary = TRUE' and passed Go boolean true.
+
+(4) Mentor Assignment Duplication on Re-seed:
+    - Problem: Running seed.exe twice inserted duplicate mentor rows because
+      mentor_assignments lacked a unique constraint on (student_id, is_primary).
+      This caused the LEFT JOIN to duplicate students (52 * 2 = 104 rows).
+    - Fix: Added 'DELETE FROM mentor_assignments;' in the seeder before populating.
+
+(5) DateTime Deserialization Across Drivers:
+    - Problem: SQLite driver stored time.Time using Go's String() representation
+      ('2025-11-23 08:36:14.28417 +0000 +0000'), causing time.Parse(time.RFC3339)
+      to fail and evaluate enrolled_at to 0001-01-01 (resulting in 106,751 active days).
+    - Fix: Created internal/store/time.go with ParseFlexibleTime() and FormatTime()
+      to strictly enforce UTC RFC3339 strings across both databases.
+
+(6) WSL2 PostgreSQL Networking & Idle Sleep Behavior:
+    - Problem A: localhost resolved to IPv6 [::1]:5432, which was actively refused.
+    - Problem B: When no interactive process is running in WSL2, Windows unloads
+      the WSL VM, causing PostgreSQL to trigger a shutdown (57P03).
+    - Fix: Explicitly bound PostgreSQL to 0.0.0.0:5432 in postgresql.conf and
+      added 'host all all all trust' in pg_hba.conf. For local development on
+      Windows, keep a background session running or run PostgreSQL via Docker.
+
+
+7. REST API SPECIFICATION (CURRENTLY IMPLEMENTED)
+--------------------------------------------------------------------------------
+Base URL: http://localhost:8080
+CORS: Enabled (*, supports localhost:5173 for Vite)
+
+(A) GET /health/live
+    Response: {"status": "UP", "timestamp": "..."}
+
+(B) GET /health/ready
+    Response: {"status": "READY", "timestamp": "..."} (Verifies DB Ping)
+
+(C) GET /api/v1/cohorts
+    Response:
+    {
+      "data": [
+        {"id": 4, "name": "01 Coding - Second Cohort", "eventId": 97, "isPilot": true, "studentCount": 52},
+        {"id": 1, "name": "01 Coding - First Cohort",  "eventId": 97, "isPilot": false, "studentCount": 94}
+      ]
+    }
+
+(D) GET /api/v1/cohorts/:id/health
+    Response:
+    {
+      "data": {
+        "cohortId": 4,
+        "cohortName": "01 Coding - Second Cohort",
+        "totalStudents": 52,
+        "activeStudents": 51,
+        "pausedStudents": 1,
+        "onTrackCount": 0,
+        "nearTrackCount": 0,
+        "offTrackCount": 40,
+        "onTrackRate": 0,
+        "expectedLevelRate": 0,
+        "statusCounts": {"ONBOARDING": 11, "PAUSED": 1, "RED": 40},
+        "calculatedAt": "2026-10-21T20:34:08Z"
+      }
+    }
+
+(E) GET /api/v1/students
+    Query Params:
+      - cohortId: integer (default 4)
+      - status: string (RED, YELLOW, GREEN, PAUSED, ONBOARDING)
+      - search: string (matches login, first_name, last_name, email)
+    Response:
+    {
+      "data": [
+        {
+          "id": 93,
+          "sourceUserId": 622,
+          "login": "ahali",
+          "firstName": "Ahmed",
+          "lastName": "Ali",
+          "email": "a.soliman1989@yahoo.com",
+          "auditRatio": 0,
+          "cohortId": 4,
+          "cohortName": "01 Coding - Second Cohort",
+          "mentor": {"id": 1, "name": "Anas (Academic Lead)"},
+          "pace": {
+            "enrolledAt": "2026-04-04T15:33:18+02:00",
+            "activeProgramDays": 200,
+            "curriculumMonth": 7,
+            "actualLevel": 0,
+            "minimumLevel": 17,
+            "expectedLevel": 20,
+            "checkpointTarget": 20,
+            "gapToMinimum": -17,
+            "gapToExpected": -20,
+            "status": "RED",
+            "reasons": ["PACE_BELOW_MINIMUM"]
+          },
+          "lastCalculatedAt": "2026-10-21T20:33:49+03:00"
+        }
+      ],
+      "meta": {
+        "cohortId": 4,
+        "cohortName": "01 Coding - Second Cohort",
+        "totalCount": 52,
+        "lastSuccessfulSyncAt": "2026-10-19T11:11:08Z"
+      }
+    }
+
+(F) GET /api/v1/students/:id
+    Returns single student pace view matching ID or sourceUserId.
+
+(G) GET /api/v1/interventions
+    List logged mentor interventions.
+
+(H) POST /api/v1/interventions
+    Payload:
+    {
+      "studentId": 93,
+      "mentorId": 1,
+      "reasonCode": "PACE_BELOW_MINIMUM",
+      "type": "CHECK_IN",
+      "action": "Conduct 1-on-1 session to diagnose curriculum blockage.",
+      "dueAt": "2026-10-28T18:00:00Z"
+    }
+
+
+8. WHAT IS MISSING / SPRINT 2 ROADMAP FOR CODEX
+--------------------------------------------------------------------------------
+To advance the project from Sprint 1 to production readiness, CODEX should tackle:
+
+[ ] 1. Live 01Edu GraphQL Sync Worker (Replacing the archive loader):
+       Implement internal/zeroone/client.go to query 01Edu Hasura endpoint directly
+       via read-only GraphQL token:
+       - Query event_by_pk for event 97 config
+       - Query event_user for levels and audit ratios
+       - Incremental sync for progress (by updatedAt) and transaction (by createdAt)
+       - Ingest record table for status intervals
+
+[ ] 2. Background Job Scheduler:
+       Implement cron/ticker in cmd/worker/main.go:
+       - 30-min incremental sync
+       - 6-hour event_user reconciliation
+       - Nightly full reconciliation + Daily Pace Snapshot generation
+
+[ ] 3. Staff Authentication & RBAC (Technical Spec Section 10):
+       - Google OAuth 2.0 / OpenID Connect for staff identity
+       - HttpOnly secure session cookies
+       - Role enforcement: Student (own profile), Mentor (assigned students),
+         Admin / Leadership (all cohorts)
+
+[ ] 4. Multi-dimensional Health Engine (Sprint 2, PRD Section 6):
+       Expand beyond pace status into student health reason codes:
+       - CHECKPOINT_BELOW_TARGET (actual checkpoint level < target)
+       - MOMENTUM_DECLINING (30d XP/level velocity drop)
+       - NO_MEANINGFUL_ACTIVITY (no XP or progress in > 14 days)
+       - PROJECT_LONG_RUNNING (project duration exceeds 2x median)
+       - AUDIT_EXPIRED_REPEATEDLY
+
+[ ] 5. Intervention Lifecycle Updates:
+       - PATCH /api/v1/interventions/:id (update status to RESOLVED/ESCALATED)
+       - POST /api/v1/interventions/:id/updates (append-only mentor notes)
+       - Measure recovery rate (% of students moving Red -> Green after action)
+
+[ ] 6. Frontend Handshake with Ziad:
+       - Validate Ziad's React table pagination and filter inputs.
+       - Connect intervention modal from frontend to POST /api/v1/interventions.
+
+[ ] 7. CI/CD Pipeline:
+       - Add .github/workflows/ci.yml with:
+         * go test ./...
+         * golangci-lint
+         * docker build validation
+
+
+9. HOW TO RESUME & RUN THE PROJECT
+--------------------------------------------------------------------------------
+Step 1: Start PostgreSQL
+  Option A (WSL2):
+    wsl -d Ubuntu -u root -e /usr/sbin/service postgresql start
+  Option B (Docker):
+    cd C:\Users\Yoga\Desktop\nextera-pulse
+    docker compose up -d postgres
+
+Step 2: Seed / Refresh Database
+    cd C:\Users\Yoga\Desktop\nextera-pulse
+    go run ./cmd/seed ../NextEra-All-Cohorts-2026-10-19.zip
+
+Step 3: Run the API Server
+    go run ./cmd/api
+
+Step 4: Execute Test Suite
+    python test_api.py
+    go test ./internal/pace/... -v
+
+================================================================================
+END OF SPECIFICATION
+================================================================================
