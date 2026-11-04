@@ -1,5 +1,6 @@
 /** @typedef {{ id: string, passwordHash?: string, [key: string]: unknown }} StoredAccount */
 
+// Remove fields retired from the profile model when reading old browser data.
 /** @param {StoredAccount} account */
 function removeRetiredProfileFields(account) {
   const { bio: _bio, posts: _posts, ...clean } = account
@@ -39,6 +40,8 @@ export async function hashAccountPassword(password) {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
+// Demo-only credential check; production authentication must be provided by
+// the backend identity service.
 /** @param {Storage} storage @param {string} email @param {string} password */
 export async function authenticateStoredAccount(storage, email, password) {
   const account = readStoredAccounts(storage).find(item => typeof item.email === 'string' && item.email.toLowerCase() === email.trim().toLowerCase())

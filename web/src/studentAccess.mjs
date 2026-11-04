@@ -1,5 +1,6 @@
 const normalizeLogin = (value = '') => value.trim().replace(/^@/, '').toLowerCase()
 
+/** Return only the cohort rows visible to the active workspace role. */
 export function visibleStudentsForRole(role, rows, assignedLogins = [], studentLogin = '') {
   if (role === 'manager') return rows
   if (role === 'mentor') {
@@ -13,6 +14,7 @@ export function visibleStudentsForRole(role, rows, assignedLogins = [], studentL
   return []
 }
 
+/** Move a student between mentor rosters while keeping one active assignment. */
 export function assignStudentToMentor(mentors, mentorId, login, assigned) {
   const normalized = normalizeLogin(login)
   return mentors.map(mentor => {

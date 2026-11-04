@@ -17,10 +17,12 @@ const permissionLabels: Record<string, string> = {
   viewMentorPerformance: 'View mentor performance',
 };
 
-export function MentorWorkspaceView({ mentor, students, accounts, interventions, lang, onSelectStudent, onBack, onActAs }: {
+// Present a mentor's assigned cohort and role-limited actions in a separate workspace view.
+export function MentorWorkspaceView({ mentor, students, accounts, mentors, interventions, lang, onSelectStudent, onBack, onActAs }: {
   mentor: PulseAccount;
   students: StudentPaceRow[];
   accounts: PulseAccount[];
+  mentors: PulseAccount[];
   interventions: Intervention[];
   lang: Language;
   onSelectStudent: (student: StudentPaceRow) => void;
@@ -46,8 +48,12 @@ export function MentorWorkspaceView({ mentor, students, accounts, interventions,
       <div className="mentor-workspace-permissions"><b>{ar ? 'صلاحيات الحساب' : 'Account permissions'}</b><div>{mentor.permissions.map(permission => <span key={permission}>{permissionLabels[permission] ?? permission}</span>)}{mentor.permissions.length === 0 && <span>{ar ? 'لا توجد صلاحيات مسجلة' : 'No permissions recorded'}</span>}</div></div>
     </section>
     <div className="mentor-workspace-metrics"><article><small>{ar ? 'الطلاب المسندون' : 'Assigned students'}</small><strong>{mentorStudents.length}</strong></article><article><small>{ar ? 'على المسار' : 'On track'}</small><strong>{onTrack}</strong></article><article><small>{ar ? 'يحتاجون متابعة' : 'Need attention'}</small><strong>{attention}</strong></article><article><small>{ar ? 'المتابعات المسجلة' : 'Follow-ups'}</small><strong>{mentorInterventions.length}</strong></article></div>
-    <MentorAnalytics rows={mentorStudents} interventions={mentorInterventions} lang={lang} onSelect={onSelectStudent} />
+    <MentorAnalytics rows={mentorStudents} interventions={mentorInterventions} lang={lang} onSelect={onSelectStudent} comparisonRows={students} accounts={accounts} mentors={mentors} />
     <section className="table-panel mentor-workspace-roster"><div className="table-heading"><div><span className="eyebrow">{ar ? 'مجموعة المنتور' : 'MENTOR ROSTER'}</span><h2>{ar ? 'الطلاب المسندون' : 'Assigned students'}</h2><p>{ar ? 'افتح أي طالب لمراجعة تقدمه وسجل متابعته.' : 'Open a student to review their progress and follow-up history.'}</p></div><span className="cohort-pill">{mentorStudents.length} {ar ? 'طالب' : 'students'}</span></div><div className="table-scroll"><table><thead><tr><th>{ar ? 'الطالب' : 'Student'}</th><th>{ar ? 'أيام نشطة' : 'Active days'}</th><th>{ar ? 'شهر المنهج' : 'Curriculum month'}</th><th>{ar ? 'المستوى' : 'Level'}</th><th>{ar ? 'حالة التقدم' : 'Pace status'}</th><th /></tr></thead><tbody>{mentorStudents.map(student => <StudentRow key={student.studentId} s={student} accounts={accounts} lang={lang} onSelect={onSelectStudent} />)}{mentorStudents.length === 0 && <tr><td colSpan={6}><div className="empty-state"><b>{ar ? 'لا يوجد طلاب مسندون لهذا المنتور حاليًا.' : 'No students are assigned to this mentor yet.'}</b></div></td></tr>}</tbody></table></div></section>
     <section className="table-panel mentor-workspace-followups"><div className="table-heading"><div><span className="eyebrow">{ar ? 'سجل الفريق' : 'TEAM ACTIVITY'}</span><h2>{ar ? 'المتابعات على طلابه' : 'Follow-ups for their students'}</h2><p>{ar ? 'المتابعات مكتوبة بواسطة أي عضو فريق على الطلاب المسندين لهذا المنتور.' : 'Notes from any team member about this mentor’s assigned students.'}</p></div><span className="student-intervention-count">{mentorInterventions.length}</span></div>{mentorInterventions.length ? <div className="mentor-workspace-followup-list">{mentorInterventions.map(item => { const student = mentorStudents.find(row => row.studentId === item.studentId); return <article key={item.id}><StudentAvatar student={student!} accounts={accounts} /><div><button type="button" onClick={() => student && onSelectStudent(student)}>{student?.displayName || student?.login}</button><p>{item.note}</p><small><b>{item.authorName || (ar ? 'عضو الفريق' : 'Team member')}</b><span>{roleName(item.authorRole)}</span><time dateTime={item.createdAt}>{date(item.createdAt)}</time>{item.performedByName && <span className="intervention-operator">{ar ? `نفّذها ${item.performedByName}` : `Performed by ${item.performedByName}`}</span>}</small></div></article>; })}</div> : <p className="mentor-workspace-empty">{ar ? 'لا توجد متابعات مسجلة على طلاب هذا المنتور.' : 'No follow-ups have been recorded for this mentor’s students.'}</p>}</section>
   </div>;
 }
+
+
+
+

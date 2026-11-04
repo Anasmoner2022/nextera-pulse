@@ -925,3 +925,16 @@ html[data-theme=dark] .account-filter {
 .profile-columns-simple {
   grid-template-columns:minmax(0,1fr) minmax(240px,320px)
 }
+.profile-viewed-quote {
+  display:grid;
+  gap:9px;
+  margin-block:16px 20px;
+  padding:19px 22px;
+  border-color:color-mix(in srgb,#39b99a 24%,var(--line));
+  background:linear-gradient(115deg,color-mix(in srgb,#39c4a2 8%,var(--surface)),var(--surface) 72%);
+}
+.profile-viewed-quote>.eyebrow { color:#279b82; font-size:9px; font-weight:800; letter-spacing:.7px; }
+.profile-viewed-quote blockquote { margin:0; color:var(--text); font:600 15px/1.75 Manrope,'Cairo',sans-serif; overflow-wrap:anywhere; }
+.profile-viewed-quote>small { color:var(--muted); font-size:9px; }
+html[data-theme=dark] .profile-viewed-quote { border-color:#2d4a40; background:linear-gradient(115deg,#1c332e,var(--surface) 72%); }
+@media(max-width:520px) { .profile-viewed-quote { padding:15px 16px; } .profile-viewed-quote blockquote { font-size:13px; } }

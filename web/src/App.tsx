@@ -4,6 +4,8 @@ import type { PulseSession } from './identity';
 import { Dashboard } from './dashboard/Dashboard';
 
 export default function App() {
+  // Restore the demo session at the app boundary so sign-in and the dashboard
+  // share one source of truth for the active account.
   const [session, setSession] = useState<PulseSession | null>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('pulse-demo-session') || 'null') as PulseSession | null;
