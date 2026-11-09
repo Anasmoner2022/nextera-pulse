@@ -8,7 +8,7 @@ import { demoSession } from './defaults';
 export function IdentityGate({ lang, onSignIn }: { lang: 'en' | 'ar'; onSignIn: (session: PulseSession) => void; }) {
   const ar = lang === 'ar', t = identityCopy[lang];
   const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('pulse-theme') === 'dark' ? 'dark' : 'light');
-  const logo = theme === 'dark' ? '/brand/nextera-logo-white.png' : '/brand/nextera-logo-transparent.png';
+  const logo = theme === 'dark' ? '/brand/nextera-wordmark-light.png' : '/brand/nextera-wordmark-dark.png';
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = ar ? 'rtl' : 'ltr';
@@ -64,6 +64,7 @@ export function IdentityGate({ lang, onSignIn }: { lang: 'en' | 'ar'; onSignIn: 
   };
   return <main className="auth-page" dir={ar ? 'rtl' : 'ltr'}>
     <div className="auth-glow glow-one" /><div className="auth-glow glow-two" />
+    <div className="auth-x-watermark" aria-hidden="true" />
     <header className="auth-top"><a className="auth-brand" href="#"><img src={logo} alt="Nextera" /><span><b>PULSE</b><small>STUDENT SUCCESS</small></span></a><div className="auth-top-actions"><button className="auth-theme-toggle" onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} aria-label={theme === 'dark' ? (ar ? 'تفعيل الوضع الفاتح' : 'Switch to light mode') : (ar ? 'تفعيل الوضع الداكن' : 'Switch to dark mode')} title={theme === 'dark' ? (ar ? 'الوضع الفاتح' : 'Light mode') : (ar ? 'الوضع الداكن' : 'Dark mode')}>{theme === 'dark' ? '☀' : '☾'}</button></div></header>
     <section className="auth-layout"><div className="auth-story"><span className="auth-kicker"><i /> {ar ? 'منصة نجاح الطلاب' : 'STUDENT SUCCESS PLATFORM'}</span><h1>{ar ? 'كل خطوة في التعلّم لها نبض.' : 'Every learning journey has a pulse.'}</h1><p>{ar ? 'تابع التقدم، افهم التحديات، وخلّي الخطوة الجاية أوضح لكل طالب.' : 'See progress clearly, understand challenges, and make the next step count.'}</p><div className="learning-visual" aria-label={ar ? 'مسار تعلم البرمجة' : 'A programming learning path'}>
         <svg className="learning-path" viewBox="0 0 440 220" fill="none" aria-hidden="true"><path d="M49 145C105 145 103 66 166 66S229 161 286 161 337 94 397 94"/><path className="path-progress" d="M49 145C105 145 103 66 166 66S229 161 286 161 337 94 397 94"/></svg>

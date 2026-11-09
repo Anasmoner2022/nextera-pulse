@@ -1,0 +1,58 @@
+.hierarchy-page { display:grid; gap:20px; min-width:0; animation:hierarchy-enter .48s cubic-bezier(.2,.8,.2,1) both; }
+.hierarchy-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; padding:22px 24px; border:1px solid var(--line); border-radius:18px; background:linear-gradient(125deg,color-mix(in srgb,#42c9ab 9%,var(--surface)),var(--surface) 58%); box-shadow:0 12px 34px rgb(28 83 70 / 5%); }
+.hierarchy-heading>div { display:grid; gap:7px; min-width:0; }
+.hierarchy-heading .eyebrow { color:#2aa88e; font-size:9px; font-weight:800; letter-spacing:1px; }
+.hierarchy-heading h2 { margin:0; color:var(--text); font-size:22px; letter-spacing:-.5px; }
+.hierarchy-heading p { margin:0; color:var(--muted); font-size:11px; }
+.hierarchy-count { display:flex; flex:0 0 auto; align-items:center; gap:5px; padding:9px 12px; border:1px solid var(--line); border-radius:99px; background:var(--surface); color:var(--muted); font-size:9px; white-space:nowrap; }
+.hierarchy-count b { color:var(--text); font-size:11px; }
+.hierarchy-count i { width:4px; height:4px; margin:0 3px; border-radius:50%; background:#47b99a; }
+.hierarchy-tree { position:relative; display:grid; justify-items:center; gap:0; min-width:0; padding:26px clamp(12px,3vw,36px) 32px; overflow:hidden; border:1px solid var(--line); border-radius:20px; background:radial-gradient(ellipse at 50% 0%,color-mix(in srgb,#36c3a2 7%,transparent),transparent 50%),var(--surface); }
+.hierarchy-root-line { width:1px; height:20px; background:linear-gradient(#33b99a,#c8ddd8); }
+.hierarchy-person { position:relative; display:flex; align-items:center; gap:12px; min-width:0; padding:12px 14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--text); text-align:start; cursor:pointer; box-shadow:0 7px 20px rgb(18 63 52 / 5%); transition:transform 220ms cubic-bezier(.2,.8,.2,1),border-color 220ms ease,box-shadow 220ms ease,background 220ms ease; }
+.hierarchy-person:hover { z-index:2; transform:translateY(-3px); border-color:color-mix(in srgb,#31b797 43%,var(--line)); background:color-mix(in srgb,#36c3a2 4%,var(--surface)); box-shadow:0 13px 28px rgb(18 92 72 / 12%); }
+.hierarchy-person.is-current { border-color:#26ad91; background:linear-gradient(110deg,color-mix(in srgb,#39c4a2 15%,var(--surface)),color-mix(in srgb,#39c4a2 5%,var(--surface))); box-shadow:0 0 0 3px color-mix(in srgb,#39c4a2 11%,transparent),0 10px 24px rgb(24 137 108 / 12%); animation:hierarchy-current-pulse 3.2s ease-in-out infinite; }
+.hierarchy-person.is-current .hierarchy-person-copy>b { color:#117d6d; }
+.hierarchy-current-badge { display:inline-flex; align-items:center; padding:2px 6px; border:1px solid color-mix(in srgb,#20a889 24%,transparent); border-radius:99px; background:color-mix(in srgb,#37c4a2 12%,var(--surface)); color:#12836f; font-size:7px; font-style:normal; font-weight:850; letter-spacing:.55px; line-height:1.2; }
+.hierarchy-person.is-current .hierarchy-open-mark { background:#26ad91; color:#fff; opacity:1; }
+.hierarchy-person:focus-visible { z-index:2; outline:2px solid #29ad91; outline-offset:3px; }
+.hierarchy-manager { z-index:1; width:min(340px,100%); border-color:color-mix(in srgb,#2db494 32%,var(--line)); background:linear-gradient(115deg,color-mix(in srgb,#39c4a0 12%,var(--surface)),var(--surface) 75%); }
+.hierarchy-manager::after { position:absolute; z-index:-1; top:100%; left:50%; width:1px; height:28px; background:#b7d8d0; content:""; }
+.hierarchy-person-copy { display:grid; flex:1; gap:4px; min-width:0; }
+.hierarchy-person-copy>small { overflow:hidden; color:#278f7d; font-size:8px; font-weight:750; letter-spacing:.45px; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; }
+.hierarchy-person-copy>b { overflow:hidden; font-size:12px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+.hierarchy-person-copy>i { overflow:hidden; color:var(--muted); font-size:9px; font-style:normal; text-overflow:ellipsis; white-space:nowrap; }
+.hierarchy-open-mark { display:grid; flex:0 0 24px; width:24px; height:24px; place-items:center; border-radius:8px; background:color-mix(in srgb,#37c4a2 9%,var(--surface)); color:#238c78; font-size:13px; opacity:.72; transition:transform 200ms ease,opacity 200ms ease; }
+.hierarchy-person:hover .hierarchy-open-mark { opacity:1; transform:translate(2px,-2px); }
+.hierarchy-branches { position:relative; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:25px 20px; align-items:start; width:100%; margin-top:28px; padding-top:26px; }
+.hierarchy-branches::before { position:absolute; top:0; left:50%; width:min(80%,1000px); height:1px; background:linear-gradient(90deg,transparent,#bfd8d2 9%,#bfd8d2 91%,transparent); content:""; transform:translateX(-50%); }
+.hierarchy-branch { position:relative; display:grid; align-content:start; justify-items:center; gap:0; min-width:0; }
+.hierarchy-branch::before { position:absolute; bottom:100%; left:50%; width:1px; height:26px; background:#bfd8d2; content:""; }
+.hierarchy-mentor { z-index:1; width:min(360px,100%); min-height:76px; }
+.hierarchy-mentor .profile-avatar { flex:0 0 44px; width:44px; height:44px; }
+.hierarchy-team-size { display:grid; flex:0 0 auto; justify-items:center; gap:1px; min-width:38px; padding:5px 7px; border-radius:9px; background:color-mix(in srgb,#37c4a2 8%,var(--surface)); color:#158771; font-size:12px; font-weight:800; }
+.hierarchy-team-size small { color:var(--muted); font-size:7px; font-weight:600; }
+.hierarchy-students { position:relative; display:grid; gap:8px; width:100%; margin-top:20px; padding:16px 0 0 17px; }
+.hierarchy-students::before { position:absolute; top:0; left:50%; width:1px; height:16px; background:#cbded9; content:""; }
+.hierarchy-students>.hierarchy-person { width:100%; min-height:60px; padding:9px 11px; box-shadow:0 3px 12px rgb(18 63 52 / 4%); }
+.hierarchy-students .profile-avatar { flex:0 0 34px; width:34px; height:34px; }
+.hierarchy-students .hierarchy-person-copy>small { font-size:7px; }
+.hierarchy-students .hierarchy-person-copy>b { font-size:10px; }
+.hierarchy-students .hierarchy-person-copy>i { font-size:8px; }
+.hierarchy-students .hierarchy-open-mark { flex-basis:21px; width:21px; height:21px; font-size:11px; }
+.hierarchy-empty-branch { justify-self:stretch; margin:20px 0 0; padding:12px; border:1px dashed var(--line); border-radius:10px; color:var(--muted); font-size:9px; text-align:center; }
+.hierarchy-empty { margin:18px 0; color:var(--muted); font-size:11px; }
+.hierarchy-unassigned { width:100%; margin-top:26px; padding-top:18px; border-top:1px dashed var(--line); }
+.hierarchy-unassigned>header { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:10px; font-weight:700; }
+.hierarchy-unassigned>header>b { display:grid; min-width:22px; height:22px; place-items:center; border-radius:7px; background:var(--soft); color:var(--text); }
+.hierarchy-unassigned .hierarchy-students { grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); margin-top:0; padding-top:12px; }
+.hierarchy-unassigned .hierarchy-students::before { display:none; }
+.member-profile-back { margin:0 0 -8px; }
+.member-profile-back>button { display:inline-flex; align-items:center; gap:8px; padding:8px 11px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--muted); font:inherit; font-size:10px; font-weight:700; cursor:pointer; transition:color 180ms ease,border-color 180ms ease,background 180ms ease,transform 180ms ease; }
+.member-profile-back>button:hover { border-color:color-mix(in srgb,#29b394 35%,var(--line)); background:color-mix(in srgb,#37c4a2 7%,var(--surface)); color:#128b76; transform:translateX(-2px); }
+.member-profile-back>button:focus-visible { outline:2px solid #29ad91; outline-offset:2px; }
+html[dir="rtl"] .member-profile-back>button:hover { transform:translateX(2px); }
+@keyframes hierarchy-enter { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+@keyframes hierarchy-current-pulse { 0%,100% { box-shadow:0 0 0 3px color-mix(in srgb,#39c4a2 9%,transparent),0 8px 20px rgb(24 137 108 / 9%); } 50% { box-shadow:0 0 0 5px color-mix(in srgb,#39c4a2 15%,transparent),0 12px 27px rgb(24 137 108 / 15%); } }
+@media(max-width:760px) { .hierarchy-heading { align-items:flex-start; flex-direction:column; padding:18px; } .hierarchy-heading h2 { font-size:19px; } .hierarchy-tree { padding:18px 12px 22px; } .hierarchy-branches { grid-template-columns:minmax(0,1fr); gap:25px; width:min(100%,480px); } .hierarchy-branches::before { left:18px; width:1px; height:calc(100% - 30px); background:#bfd8d2; transform:none; } .hierarchy-branch { padding-inline-start:27px; } .hierarchy-branch::before { left:18px; width:10px; height:1px; bottom:auto; top:38px; } .hierarchy-manager { width:min(360px,100%); } .hierarchy-manager::after { left:18px; height:100%; top:100%; } .hierarchy-students { padding-inline-start:14px; } }
+@media(prefers-reduced-motion:reduce) { .hierarchy-page { animation:none; } .hierarchy-person,.hierarchy-open-mark { transition:none; } .hierarchy-person.is-current { animation:none; } }

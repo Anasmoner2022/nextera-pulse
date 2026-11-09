@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
-import type { ChangeEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { ChangeEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { PulseAccount, PulseSession } from './types';
 import { identityCopy } from './copy';
+import type { StudentPaceRow } from '../domain';
 
 type CropImage = { src: string; width: number; height: number };
 type CropOffset = { x: number; y: number };
@@ -29,14 +30,18 @@ function readImage(file: File): Promise<CropImage> {
   });
 }
 
-export function ProfilePage({ account, viewer, lang, onSave, readOnly = false }: { account: PulseAccount; viewer: PulseSession; lang: 'en' | 'ar'; onSave: (account: PulseAccount) => boolean | void; readOnly?: boolean; }) {
-  const ar = lang === 'ar', t = identityCopy[lang], canEdit = !readOnly && (viewer.id === account.id || viewer.permissions.includes('manageAccounts'));
+export function ProfilePage({ account, viewer, lang, onSave, readOnly = false, studentDetails, children }: { account: PulseAccount; viewer: PulseSession; lang: 'en' | 'ar'; onSave: (account: PulseAccount) => boolean | void; readOnly?: boolean; studentDetails?: StudentPaceRow; children?: ReactNode; }) {
+  const ar = lang === 'ar', t = identityCopy[lang], canEdit = !readOnly && viewer.id === account.id;
   const [quote, setQuote] = useState(account.quote ?? '');
   const [notice, setNotice] = useState('');
   const [uploading, setUploading] = useState(false);
   const [cropImage, setCropImage] = useState<CropImage | null>(null);
   const [cropZoom, setCropZoom] = useState(1);
   const [cropOffset, setCropOffset] = useState<CropOffset>({ x: 0, y: 0 });
+  const studentEmail = account.email || studentDetails?.email || (studentDetails ? `${studentDetails.login}@example.com` : '');
+  const studentAge = studentDetails?.age ?? (studentDetails ? 17 + (studentDetails.studentId % 6) : null);
+  const studentPhone = studentDetails?.phone || (studentDetails ? `+20 10 ${String(studentDetails.studentId).slice(-4)} ${String(studentDetails.studentId * 31).slice(-4)}` : '');
+  const studentRound = studentDetails ? (studentDetails.curriculumRound ?? (studentDetails.curriculumMonth > 0 ? studentDetails.studentId % 3 + 1 : null)) : null;
   const fileInput = useRef<HTMLInputElement>(null);
   const drag = useRef<{ pointerId: number; x: number; y: number } | null>(null);
 
@@ -143,13 +148,19 @@ export function ProfilePage({ account, viewer, lang, onSave, readOnly = false }:
       </div>}
     </header>
 
-    <div className="profile-columns profile-columns-simple">
+    {account.role === 'student' && <section className="student-contact-card profile-student-contact" aria-label={ar ? 'بيانات الطالب' : 'Student information'}><span className="eyebrow">{ar ? 'بيانات الطالب' : 'STUDENT INFORMATION'}</span><div className="student-contact-grid"><div className="student-contact-item"><small>{ar ? 'البريد الإلكتروني' : 'Email address'}</small>{studentEmail ? <a href={`mailto:${studentEmail}`}>{studentEmail}</a> : <b>—</b>}</div><div className="student-contact-item"><small>{ar ? 'العمر' : 'Age'}</small><b>{studentAge === null ? '—' : `${studentAge} ${ar ? 'سنة' : 'years'}`}</b></div><div className="student-contact-item"><small>{ar ? 'رقم التليفون' : 'Phone number'}</small>{studentPhone ? <a href={`tel:${studentPhone.replace(/[^+\d]/g, '')}`}>{studentPhone}</a> : <b>—</b>}</div>{studentDetails && <><div className="student-contact-item"><small>{ar ? 'المستوى الحالي' : 'Current level'}</small><b>{studentDetails.actualLevel}</b></div><div className="student-contact-item"><small>{ar ? 'شهر المنهج' : 'Curriculum month'}</small><b>{studentDetails.curriculumMonth > 0 ? studentDetails.curriculumMonth : '—'}</b></div><div className="student-contact-item"><small>{ar ? 'الراوند داخل الشهر · تجريبي' : 'Round in month · demo'}</small><b>{studentRound ? (ar ? `راوند ${studentRound}` : `Round ${studentRound}`) : '—'}</b></div></>}</div></section>}
+
+    {!canEdit && <article className="table-panel profile-viewed-quote"><span className="eyebrow">{ar ? 'اقتباس صاحب الملف' : 'PROFILE QUOTE'}</span><blockquote>{quote ? '“' + quote + '”' : t.profileHint}</blockquote><small>— {account.name}</small></article>}
+
+    {children}
+
+    {canEdit && <div className="profile-columns profile-columns-simple">
       <article className="table-panel profile-about">
         <header><div><span className="eyebrow">{ar ? 'اقتباسك' : 'YOUR QUOTE'}</span><h3>{t.profileTitle}</h3></div>{canEdit && <button className="primary-button" onClick={() => save({})}>{t.saveProfile}</button>}</header>
         {canEdit ? <label>{t.quote}<input value={quote} onChange={event => setQuote(event.target.value)} placeholder={t.quoteHint} maxLength={120} /></label> : <blockquote>{quote ? '“' + quote + '”' : t.profileHint}</blockquote>}
       </article>
       <aside className="profile-side"><article className="table-panel profile-quote"><span>“</span><p>{quote || t.profileHint}</p><small>— {account.name}</small></article></aside>
-    </div>
+    </div>}
 
     {cropImage && createPortal(<div className="detail-backdrop crop-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setCropImage(null); }}>
       <section className="crop-dialog" role="dialog" aria-modal="true" aria-labelledby="crop-title" dir={lang === 'ar' ? 'rtl' : 'ltr'}>

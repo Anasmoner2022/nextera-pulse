@@ -44,10 +44,10 @@
   gap:12px
 }
 .auth-brand img {
-  width:112px;
-  height:45px;
+  width:142px;
+  height:54px;
   object-fit:contain;
-  object-position:left center
+  object-position:center
 }
 .auth-brand>span {
   display:grid;

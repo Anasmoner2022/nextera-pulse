@@ -76,6 +76,7 @@ func main() {
 	log.Println("  - GET  /api/v1/students?cohortId=4&status=RED")
 	log.Println("  - GET  /api/v1/students/:id")
 	log.Println("  - GET  /api/v1/cohorts")
+	log.Println("  - GET  /api/v1/cohorts/:id/students")
 	log.Println("  - GET  /api/v1/cohorts/:id/health")
 	log.Println("  - GET  /api/v1/interventions")
 	log.Println("  - POST /api/v1/interventions")

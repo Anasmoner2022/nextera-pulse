@@ -1,3 +1,4 @@
+// Normalize account identifiers consistently before joining roster data.
 function normalize(value) {
   return typeof value === 'string' ? value.trim().replace(/^@/, '').toLocaleLowerCase() : ''
 }
@@ -19,4 +20,16 @@ export function findLinkedStudentAccount(student, accounts) {
     return normalize(account.email?.split('@')[0]) === login
   })
   return legacyMatches.length === 1 ? legacyMatches[0] : null
+}
+
+/** Find a student's assigned mentor from either the student link or mentor roster. */
+export function findAssignedMentor(student, accounts, mentors) {
+  const linkedAccount = findLinkedStudentAccount(student, accounts)
+  if (linkedAccount?.mentorId) {
+    const linkedMentor = mentors.find(mentor => mentor.id === linkedAccount.mentorId)
+    if (linkedMentor) return linkedMentor
+  }
+  const login = normalize(student?.login)
+  if (!login) return null
+  return mentors.find(mentor => (mentor.assignedStudentLogins ?? []).some(assignedLogin => normalize(assignedLogin) === login)) ?? null
 }

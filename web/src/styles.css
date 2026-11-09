@@ -11,7 +11,10 @@
   --muted:#7e8c8e;
   --line:#e7eeee;
   --soft:#f7f9f9;
-  --mint:#38c9b7;
+  --mint:#43c8b7;
+  --brand-teal:#45c9bd;
+  --brand-green:#78e860;
+  --brand-gradient:linear-gradient(125deg,var(--brand-teal),var(--brand-green));
   --shadow:0 8px 28px #244b4b08;
   font-synthesis:none;
   text-rendering:optimizeLegibility
@@ -66,7 +69,7 @@ html[dir=rtl] .sidebar {
   width:38px;
   height:38px;
   border-radius:12px;
-  background:linear-gradient(145deg,#38c9bb,#73e478);
+  background:var(--brand-gradient);
   font:800 20px Manrope;
   color:#fff;
   display:grid;
@@ -869,10 +872,10 @@ html[dir=rtl] .notification i {
   left:2px
 }
 .brand-logo {
-  width:102px;
-  height:38px;
+  width:112px;
+  height:42px;
   object-fit:contain;
-  object-position:left center
+  object-position:center
 }
 .brand-copy b {
   font-size:12px;
@@ -882,6 +885,7 @@ html[dir=rtl] .notification i {
   font-size:7px;
   letter-spacing:1px
 }
+.brand-copy b { color:var(--text); }
 .student-row {
   cursor:pointer
 }

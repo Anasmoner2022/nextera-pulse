@@ -56,6 +56,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v1/students", s.handleGetStudents)
 	s.mux.HandleFunc("GET /api/v1/students/{id}", s.handleGetStudentByID)
 	s.mux.HandleFunc("GET /api/v1/cohorts", s.handleGetCohorts)
+	s.mux.HandleFunc("GET /api/v1/cohorts/{id}/students", s.handleGetCohortStudents)
 	s.mux.HandleFunc("GET /api/v1/cohorts/{id}/health", s.handleGetCohortHealth)
 	s.mux.HandleFunc("GET /api/v1/interventions", s.handleGetInterventions)
 	s.mux.HandleFunc("POST /api/v1/interventions", s.handleCreateIntervention)
@@ -137,21 +138,43 @@ func (s *Server) handleGetStudentByID(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetCohorts(w http.ResponseWriter, r *http.Request) {
 	cohorts := []map[string]any{
 		{
-			"id":        4,
-			"name":      "01 Coding - Second Cohort",
-			"eventId":   97,
-			"isPilot":   true,
+			"id":           4,
+			"name":         "01 Coding - Second Cohort",
+			"eventId":      97,
+			"isPilot":      true,
 			"studentCount": 52,
 		},
 		{
-			"id":        1,
-			"name":      "01 Coding - First Cohort",
-			"eventId":   97,
-			"isPilot":   false,
+			"id":           1,
+			"name":         "01 Coding - First Cohort",
+			"eventId":      97,
+			"isPilot":      false,
 			"studentCount": 94,
 		},
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": cohorts})
+}
+
+func (s *Server) handleGetCohortStudents(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	pathID, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_COHORT_ID", "Cohort or event ID must be an integer")
+		return
+	}
+	cohortID, eventID, ok := resolveMentorCohort(pathID)
+	if !ok {
+		writeError(w, http.StatusNotFound, "UNKNOWN_COHORT", "Unknown cohort or event id")
+		return
+	}
+
+	students, err := s.db.ListStudentsWithPace(r.Context(), cohortID, r.URL.Query().Get("status"), r.URL.Query().Get("search"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, mentorStudentsResponse(eventID, students, time.Now()))
 }
 
 func (s *Server) handleGetCohortHealth(w http.ResponseWriter, r *http.Request) {

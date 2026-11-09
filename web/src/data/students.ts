@@ -3,6 +3,8 @@ import { mockStudents } from './mockStudents';
 
 const DEMO_LATENCY_MS = 320;
 
+// Keep mock and live records behind one adapter so UI components do not need
+// source-specific branches or transport details.
 function waitForDemoNetwork(): Promise<void> {
   return new Promise(resolve => window.setTimeout(resolve, DEMO_LATENCY_MS));
 }
