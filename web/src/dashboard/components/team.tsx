@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { StudentPaceRow } from '../../domain';
 import { ProfileAvatar } from '../../identity';
 import type { PulseAccount } from '../../identity';
+import { usesLiveApi } from '../../data/students';
 import { normalizeLogin } from '../config';
 import type { Language } from '../config';
 
@@ -114,6 +115,6 @@ export function TeamManagement({ mentors, rows, lang, onUpdate, onAssign }: Team
     <section className="team-assignment-section"><header className="team-roster-header"><div><span className="eyebrow">{ar ? 'توزيع الطلاب' : 'STUDENT ROSTER'}</span><h3>{ar ? 'إسناد الطلاب' : 'Student assignments'}</h3></div><div className="team-roster-tools"><small>{ar ? `عرض ${visibleRows.length} من ${rows.length} طالب` : `Showing ${visibleRows.length} of ${rows.length} students`}</small><label className="team-roster-search"><span aria-hidden="true">⌕</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={ar ? 'ابحث باسم الطالب أو الـ login' : 'Search name or login'} aria-label={ar ? 'ابحث عن طالب' : 'Search students'} />{query && <button type="button" onClick={() => setQuery('')} aria-label={ar ? 'مسح البحث' : 'Clear search'}>×</button>}</label></div></header>
       <div className="team-assignment-list">{visibleRows.map(student => { const index = rows.indexOf(student); const current = assignedTo(student.login); return <article className="team-assignment-row" key={student.studentId}><span className="team-assignment-index">{String(index + 1).padStart(2, '0')}</span><div className="team-assignment-student"><b>{student.displayName || student.login}</b><small>@{student.login}</small></div><span className={`team-assignment-status ${current ? 'assigned' : 'unassigned'}`}><i />{current ? (ar ? 'تم الإسناد' : 'Assigned') : (ar ? 'مطلوب إسناد' : 'Needs mentor')}</span><label className="team-assignment-control"><small>{ar ? 'المنتور المسؤول' : 'Assigned mentor'}</small><MentorPicker mentors={mentors} rows={rows} current={current} student={student} lang={lang} assignedTo={assignedTo} onAssign={onAssign} /></label></article>;})}{rows.length > 0 && visibleRows.length === 0 && <div className="team-roster-empty"><b>{ar ? 'ملقيناش طالب بالاسم ده' : 'No students match your search'}</b><span>{ar ? 'جرّب اسمًا أو login مختلفًا.' : 'Try another name or login.'}</span></div>}{!rows.length && <div className="empty-state"><b>{ar ? 'لا توجد بيانات طلاب' : 'No student records yet'}</b></div>}</div>
     </section>
-    <p className="settings-note">{ar ? 'تغييرات السعة والتوزيع محفوظة في نسخة العرض على هذا الجهاز.' : 'Capacity and assignment changes are saved in this browser demo.'}</p>
+    <p className="settings-note">{usesLiveApi() ? (ar ? 'مدير البرنامج يسند كل طالب. يظهر هذا الإسناد لكل المنتورز.' : 'The program manager assigns each student. That assignment is shown to every mentor.') : (ar ? 'تغييرات السعة والتوزيع محفوظة في نسخة العرض على هذا الجهاز.' : 'Capacity and assignment changes are saved in this browser demo.')}</p>
   </section>;
 }

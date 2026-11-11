@@ -5,6 +5,7 @@ import type { Language } from '../config';
 
 type HierarchyProps = {
   manager: PulseAccount;
+  managers?: PulseAccount[];
   mentors: PulseAccount[];
   rows: StudentPaceRow[];
   accounts: PulseAccount[];
@@ -18,12 +19,13 @@ type HierarchyProps = {
 const roleLabel = (role: PulseRole, ar: boolean) => role === 'manager' ? (ar ? 'مدير البرنامج' : 'Program Manager') : role === 'mentor' ? (ar ? 'منتور' : 'Mentor') : (ar ? 'طالب' : 'Student');
 
 // Display the manager, mentors, and students as one navigable organization map.
-export function TeamHierarchy({ manager, mentors, rows, accounts, viewer, lang, onOpenAccount, onOpenStudent }: HierarchyProps) {
+export function TeamHierarchy({ manager, managers, mentors, rows, accounts, viewer, lang, onOpenAccount, onOpenStudent }: HierarchyProps) {
   const ar = lang === 'ar';
   // The hierarchy is an explicitly shared directory: every role can browse
   // all mentor and student profiles. Profile navigation remains read-only.
   const scopedRows = rows;
   const shownMentors = mentors;
+  const shownManagers = managers && managers.length > 0 ? managers : [manager];
 
   // Resolve each student from the account link first, then fall back to the mentor roster.
   function assignedMentor(row: StudentPaceRow, mentor: PulseAccount, allAccounts: PulseAccount[]) {
@@ -49,11 +51,11 @@ export function TeamHierarchy({ manager, mentors, rows, accounts, viewer, lang, 
 
     <div className="hierarchy-tree">
       <div className="hierarchy-root-line" aria-hidden="true" />
-      <button type="button" className={`hierarchy-person hierarchy-manager${manager.id === viewer.id ? ' is-current' : ''}`} aria-current={manager.id === viewer.id ? 'true' : undefined} onClick={() => onOpenAccount(manager)}>
-        <ProfileAvatar account={manager} size="medium" />
-        <span className="hierarchy-person-copy"><small>{roleLabel('manager', ar)}{manager.id === viewer.id && <em className="hierarchy-current-badge">{ar ? 'أنت' : 'YOU'}</em>}</small><b>{manager.name}</b><i>{manager.email}</i></span>
+      {shownManagers.map(person => <button type="button" className={`hierarchy-person hierarchy-manager${person.id === viewer.id ? ' is-current' : ''}`} key={person.id} aria-current={person.id === viewer.id ? 'true' : undefined} onClick={() => onOpenAccount(person)}>
+        <ProfileAvatar account={person} size="medium" />
+        <span className="hierarchy-person-copy"><small>{roleLabel('manager', ar)}{person.id === viewer.id && <em className="hierarchy-current-badge">{ar ? 'أنت' : 'YOU'}</em>}</small><b>{person.name}</b><i>{person.email}</i></span>
         <span className="hierarchy-open-mark" aria-hidden="true">↗</span>
-      </button>
+      </button>)}
 
       {shownMentors.length > 0 ? <div className="hierarchy-branches">
         {shownMentors.map(mentor => {

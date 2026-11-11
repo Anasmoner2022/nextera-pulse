@@ -33,6 +33,8 @@ export type StudentPaceRow = {
   paceStatus: PaceStatus;
   sourceStatus: AcademyStatus;
   healthReasonCodes: string[];
+  mentorId?: number;
+  mentorName?: string;
 };
 
 export type StudentsResponse = {

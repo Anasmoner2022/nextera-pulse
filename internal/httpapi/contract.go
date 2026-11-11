@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"nextera-pulse/internal/model"
+	"nextera-pulse/internal/store"
 )
 
 const (
@@ -44,6 +45,8 @@ type mentorStudentRow struct {
 	PaceStatus         string   `json:"paceStatus"`
 	SourceStatus       string   `json:"sourceStatus"`
 	HealthReasonCodes  []string `json:"healthReasonCodes"`
+	MentorID           int64    `json:"mentorId,omitempty"`
+	MentorName         string   `json:"mentorName,omitempty"`
 }
 
 type mentorStudentsPayload struct {
@@ -68,10 +71,7 @@ func mentorStudentsResponse(eventID int, students []model.StudentPaceView, now t
 		if name == "" {
 			name = student.Login
 		}
-		reasons := student.Pace.Reasons
-		if reasons == nil {
-			reasons = []string{}
-		}
+		reasons := mentorReasonCodes(student.Pace.Reasons)
 		rows = append(rows, mentorStudentRow{
 			StudentID:          student.ID,
 			Login:              student.Login,
@@ -87,8 +87,10 @@ func mentorStudentsResponse(eventID int, students []model.StudentPaceView, now t
 			GapToMinimum:       student.Pace.GapToMinimum,
 			GapToExpected:      student.Pace.GapToExpected,
 			PaceStatus:         mentorPaceStatus(student.Pace.Status),
-			SourceStatus:       mentorSourceStatus(student.Pace.Status),
+			SourceStatus:       archiveSourceStatus(student.SourceStatus),
 			HealthReasonCodes:  reasons,
+			MentorID:           mentorID(student),
+			MentorName:         mentorName(student),
 		})
 	}
 	return mentorStudentsPayload{
@@ -97,6 +99,20 @@ func mentorStudentsResponse(eventID int, students []model.StudentPaceView, now t
 		SnapshotDate: snapshot.Format("2006-01-02"),
 		Students:     rows,
 	}
+}
+
+func mentorID(student model.StudentPaceView) int64 {
+	if student.Mentor == nil {
+		return 0
+	}
+	return student.Mentor.ID
+}
+
+func mentorName(student model.StudentPaceView) string {
+	if student.Mentor == nil {
+		return ""
+	}
+	return student.Mentor.Name
 }
 
 func mentorPaceStatus(status string) string {
@@ -109,13 +125,51 @@ func mentorPaceStatus(status string) string {
 	}
 }
 
-func mentorSourceStatus(paceStatus string) string {
-	switch paceStatus {
-	case "INACTIVE":
-		return "left-school"
-	case "PAUSED":
-		return "restricted"
+func mentorReasonCodes(reasons []string) []string {
+	if len(reasons) == 0 {
+		return []string{}
+	}
+	mapped := make([]string, len(reasons))
+	for i, reason := range reasons {
+		switch reason {
+		case "PACE_BELOW_TARGET":
+			mapped[i] = "BELOW_EXPECTED_LEVEL"
+		case "PACE_BELOW_MINIMUM":
+			mapped[i] = "BELOW_MINIMUM_LEVEL"
+		case "ADMINISTRATIVE_PAUSE":
+			mapped[i] = "CURRENTLY_PAUSED"
+		case "STUDENT_LEFT_SCHOOL":
+			mapped[i] = "LEFT_SCHOOL"
+		case "ONBOARDING":
+			mapped[i] = "NO_TIMELINE"
+		default:
+			mapped[i] = reason
+		}
+	}
+	return mapped
+}
+
+func formatAPITime(value string) string {
+	parsed := store.ParseFlexibleTime(value)
+	if parsed.IsZero() {
+		return value
+	}
+	return parsed.UTC().Format(time.RFC3339)
+}
+
+func isLocalDevOrigin(origin string) bool {
+	switch origin {
+	case "http://127.0.0.1:4181", "http://localhost:4181", "http://127.0.0.1:5173", "http://localhost:5173":
+		return true
 	default:
+		return false
+	}
+}
+
+func archiveSourceStatus(recordType string) string {
+	status := strings.TrimSpace(recordType)
+	if status == "" {
 		return "active"
 	}
+	return status
 }

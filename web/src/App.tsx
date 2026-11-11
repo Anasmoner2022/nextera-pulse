@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { IdentityGate } from './identity';
 import type { PulseSession } from './identity';
 import { Dashboard } from './dashboard/Dashboard';
+import { usesLiveApi } from './data/students';
 
 export default function App() {
-  // Restore the demo session at the app boundary so sign-in and the dashboard
-  // share one source of truth for the active account.
+  // Restore the signed-in 01Edu person. A leftover demo preview is not an account.
   const [session, setSession] = useState<PulseSession | null>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('pulse-demo-session') || 'null') as PulseSession | null;
-      return saved?.id && saved?.permissions ? saved : null;
+      if (!saved?.id || !saved?.permissions) return null;
+      if (usesLiveApi() && !saved.id.startsWith('01edu-')) return null;
+      return saved;
     } catch {
       return null;
     }

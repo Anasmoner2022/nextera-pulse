@@ -21,10 +21,10 @@ import (
 
 // IngestResult summarizes the results of an ingestion run
 type IngestResult struct {
-	StudentsCount int
-	RecordsCount  int
+	StudentsCount  int
+	RecordsCount   int
 	SnapshotsCount int
-	Duration      time.Duration
+	Duration       time.Duration
 }
 
 // IngestZipArchive parses Anas's export zip file and loads everything into the database
@@ -77,9 +77,13 @@ func IngestZipArchive(ctx context.Context, db *store.DB, zipFilePath string) (*I
 		}
 	}
 
-	// 4. Seed default mentors if not present
-	if err := seedMentors(ctx, db, studentIDMap); err != nil {
-		log.Printf("warning: error seeding mentors: %v", err)
+	// 4. Load the rest of the 01Edu export. Mentor names in the archive are not
+	// assignments, so placeholder mentors are cleared instead of invented.
+	if _, err := db.ExecContext(ctx, "DELETE FROM mentor_assignments"); err != nil {
+		log.Printf("warning: could not clear placeholder mentors: %v", err)
+	}
+	if err := ingestLearningArchive(ctx, db, fileMap, studentIDMap); err != nil {
+		return nil, fmt.Errorf("failed ingesting 01Edu learning records: %w", err)
 	}
 
 	// 5. Run Pace Engine calculation and create daily snapshots
@@ -93,7 +97,7 @@ func IngestZipArchive(ctx context.Context, db *store.DB, zipFilePath string) (*I
 	// 6. Record sync audit row
 	_, _ = db.ExecContext(ctx, db.Rebind(`INSERT INTO sync_runs (source, status, records_ingested, started_at, completed_at)
                                           VALUES (?, ?, ?, ?, ?)`),
-		"archive_zip", "SUCCESS", result.StudentsCount+result.RecordsCount, start, time.Now())
+		"archive_zip", "SUCCESS", result.StudentsCount+result.RecordsCount, store.FormatTime(start), store.FormatTime(time.Now()))
 
 	return result, nil
 }
@@ -327,7 +331,7 @@ func generateSnapshots(ctx context.Context, db *store.DB) (int, error) {
 
 	type studentRow struct {
 		id       int64
-		enrolled string
+		enrolled store.FlexibleTime
 		level    float64
 		eventID  int
 	}
@@ -340,10 +344,13 @@ func generateSnapshots(ctx context.Context, db *store.DB) (int, error) {
 		}
 		students = append(students, s)
 	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
 
 	count := 0
 	for _, s := range students {
-		enrolledAt := store.ParseFlexibleTime(s.enrolled)
+		enrolledAt := s.enrolled.Time
 		records, _ := db.GetStudentRecords(ctx, s.id)
 
 		metrics := engine.Calculate(enrolledAt, s.level, records, now)

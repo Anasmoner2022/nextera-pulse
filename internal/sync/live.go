@@ -82,12 +82,15 @@ func RefreshPilotLevels(ctx context.Context, db *store.DB, source EnrollmentSour
 		return LiveResult{}, errors.New("no matching pilot students; refusing empty live refresh")
 	}
 	// Store sync history in the same transaction as the level refresh.
-	_, err = tx.ExecContext(ctx, db.Rebind(`INSERT INTO sync_runs (source,status,records_ingested,started_at,completed_at) VALUES (?,?,?,?,?)`), "graphql_pilot_levels", "SUCCESS", outcome.UpdatedRows, now, now)
+	_, err = tx.ExecContext(ctx, db.Rebind(`INSERT INTO sync_runs (source,status,records_ingested,started_at,completed_at) VALUES (?,?,?,?,?)`), "graphql_pilot_levels", "SUCCESS", outcome.UpdatedRows, store.FormatTime(now), store.FormatTime(now))
 	if err != nil {
 		return LiveResult{}, err
 	}
 	if err = tx.Commit(); err != nil {
 		return LiveResult{}, err
+	}
+	if _, err = generateSnapshots(ctx, db); err != nil {
+		return outcome, fmt.Errorf("pilot levels were saved, but pace snapshots were not rebuilt: %w", err)
 	}
 	return outcome, nil
 }

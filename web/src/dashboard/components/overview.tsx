@@ -45,7 +45,7 @@ export function ManagerOverview({ mentors, rows, interventions, lang, onOpenTeam
         {onOpenMentor && <button type="button" className="mentor-open-workspace" onClick={() => onOpenMentor(mentor)}>{ar ? 'فتح مساحة المنتور' : 'Open mentor workspace'} <span aria-hidden="true">→</span></button>}
       </article>;
     })}{mentors.length === 0 && <div className="empty-state"><b>{ar ? 'لا توجد حسابات منتورز حتى الآن' : 'No mentor accounts yet.'}</b></div>}</div>
-    <p className="manager-footnote">{ar ? 'المنتور يطّلع على طلابه المسندين فقط. البيانات هنا ملخصة على مستوى البرنامج.' : 'Mentors only see their assigned students. This view summarizes the whole program.'}</p>
+    <p className="manager-footnote">{ar ? 'مدير البرنامج يوزّع الطلاب. كل المنتورز ومدير البرنامج يرون كل الطلاب، ويظهر المسند منهم تحت منتوره.' : 'The program manager assigns students. Every mentor and the program manager can see every student, and an assigned student is shown under that mentor.'}</p>
   </section>;
 }
 

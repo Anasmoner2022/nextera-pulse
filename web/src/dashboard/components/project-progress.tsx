@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { StudentPaceRow } from '../../domain';
+import { getCohortProgress, getStudentProgress, usesLiveApi, type ProgressBoard } from '../../data/students';
 import type { PulseAccount } from '../../identity';
 import { findAssignedMentor } from '../../studentAccountLink.js';
 import type { Language } from '../config';
@@ -31,8 +32,56 @@ function studentInitials(student: StudentPaceRow) {
   return (student.displayName || student.login).split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 }
 
-// Render the project matrix for one student or a cohort, with mentor-aware filtering.
-export function ProjectProgress({ rows, accounts, mentors, lang, view, onSelectStudent }: { rows: StudentPaceRow[]; accounts: PulseAccount[]; mentors: PulseAccount[]; lang: Language; view: 'cohort' | 'student'; onSelectStudent?: (student: StudentPaceRow) => void; }) {
+type ProjectProgressProps = { rows: StudentPaceRow[]; accounts: PulseAccount[]; mentors: PulseAccount[]; lang: Language; view: 'cohort' | 'student'; onSelectStudent?: (student: StudentPaceRow) => void };
+
+export function ProjectProgress(props: ProjectProgressProps) {
+  if (usesLiveApi()) return <ArchiveProjectProgress {...props} />;
+  return <DemoProjectProgress {...props} />;
+}
+
+function ArchiveProjectProgress({ rows, lang, view, onSelectStudent }: ProjectProgressProps) {
+  const ar = lang === 'ar';
+  const studentId = view === 'student' ? rows[0]?.studentId : undefined;
+  const [board, setBoard] = useState<ProgressBoard | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setBoard(null);
+    setFailed(false);
+    const load = studentId ? getStudentProgress(studentId) : getCohortProgress();
+    load.then(next => { if (live) setBoard(next); }).catch(() => { if (live) setFailed(true); });
+    return () => { live = false; };
+  }, [studentId]);
+  const students = board?.students ?? [];
+  const projects = board?.projects ?? [];
+  const doneCells = students.reduce((sum, student) => sum + student.completed, 0);
+  const totalCells = students.reduce((sum, student) => sum + student.total, 0);
+  const completionRate = totalCells ? Math.round(doneCells / totalCells * 100) : 0;
+  const visible = view === 'student' ? students.filter(student => student.studentId === studentId) : students;
+  return <section className={`table-panel project-progress ${view === 'cohort' ? 'project-progress-cohort' : 'project-progress-student'}`}>
+    <header className="project-progress-heading"><div><span className="eyebrow">{ar ? 'تقدم المشاريع' : 'PROJECT PROGRESS'}</span><h2>{view === 'cohort' ? (ar ? 'إنجاز مشاريع الكوهورت' : 'Cohort project progress') : (ar ? 'مشاريعك' : 'Your projects')}</h2><p>{board?.syncedAt ? (ar ? 'المربع يُملأ من سجل 01Edu المباشر.' : 'A square is filled from the live 01Edu record.') : (ar ? 'المربع يُملأ من أرشيف 01Edu إلى أن يحدّثه منتور أو مدير البرنامج.' : 'A square is filled from the 01Edu archive until a mentor or program manager signs in and refreshes it.')}</p></div><span className="project-demo-tag"><i />{board?.syncedAt ? (ar ? '01Edu مباشر' : 'Live 01Edu') : '01Edu'}</span></header>
+    {failed && <p className="project-empty">{ar ? 'تعذر تحميل تقدم المشاريع من الأرشيف.' : 'Project progress could not be loaded from the archive.'}</p>}
+    {!failed && !board && <p className="project-empty">{ar ? 'جارٍ التحميل من 01Edu…' : 'Loading project records from 01Edu…'}</p>}
+    {board && projects.length === 0 && <p className="project-empty">{ar ? 'لا توجد مشاريع من النوع project في أرشيف 01Edu لهذا الكوهورت.' : 'The 01Edu archive has no project records for this cohort.'}</p>}
+    {board && projects.length > 0 && <>
+      <div className="project-overall-progress"><div><b>{completionRate}%</b><span>{ar ? `${doneCells} من ${totalCells} خلية منتهية` : `${doneCells} of ${totalCells} project cells are done`}</span></div><div className="project-overall-track"><i style={{ width: `${completionRate}%` }} /></div></div>
+      <details className="project-key"><summary>{ar ? `أسماء المشاريع (${projects.length})` : `Project names (${projects.length})`}</summary><div>{projects.map((project, index) => <span key={project.id}><b>{`P${index + 1}`}</b>{project.name}</span>)}</div></details>
+      <div className="project-student-board" aria-label={ar ? 'إنجاز المشاريع حسب الطالب' : 'Project completion by student'}>
+        {visible.map(student => {
+          const pace = rows.find(row => row.studentId === student.studentId);
+          return <article className="project-student-card" key={student.studentId}>
+            <header><span className="project-student-avatar">{(student.displayName || student.login).slice(0, 2).toUpperCase()}</span><span className="project-card-identity"><b>{student.displayName || student.login}</b><small>{student.mentorName || (ar ? 'لم يُسنَد' : 'Unassigned')}</small></span><span className="project-card-count"><b>{student.completed}<small>/{student.total}</small></b><span>{ar ? 'مشاريع مكتملة' : 'projects done'}</span></span></header>
+            <div className="project-student-meter"><i style={{ width: `${student.total ? Math.round(student.completed / student.total * 100) : 0}%` }} /></div>
+            <div className="project-card-steps">{projects.map((project, index) => { const complete = student.done[index]; return <div className="project-step" key={project.id} title={`${project.name}: ${complete ? (ar ? 'مكتمل' : 'Done') : (ar ? 'غير مكتمل' : 'Not done')}`}><span className={`project-square ${complete ? 'complete' : ''}`}>{complete ? '✓' : ''}</span><small>{`P${index + 1}`}</small></div>; })}</div>
+            {view === 'cohort' && pace && onSelectStudent && <button type="button" className="setting-action" onClick={() => onSelectStudent(pace)}>{ar ? 'فتح السجل' : 'Open record'}</button>}
+          </article>;
+        })}
+      </div>
+    </>}
+  </section>;
+}
+
+function DemoProjectProgress({ rows, accounts, mentors, lang, view, onSelectStudent }: ProjectProgressProps) {
   const ar = lang === 'ar';
   const isCohort = view === 'cohort';
   const [selection, setSelection] = useState<{ type: 'project'; index: number } | { type: 'mentor'; id: string } | null>(null);

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -45,4 +46,29 @@ func FormatTime(t time.Time) string {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+// FlexibleTime scans either a TEXT timestamp or a driver time.Time.
+// SQLite stores timestamps as text. PostgreSQL returns time.Time for timestamptz.
+type FlexibleTime struct {
+	Time time.Time
+}
+
+func (f *FlexibleTime) Scan(src any) error {
+	switch value := src.(type) {
+	case nil:
+		f.Time = time.Time{}
+		return nil
+	case time.Time:
+		f.Time = value
+		return nil
+	case string:
+		f.Time = ParseFlexibleTime(value)
+		return nil
+	case []byte:
+		f.Time = ParseFlexibleTime(string(value))
+		return nil
+	default:
+		return fmt.Errorf("cannot scan %T as time", src)
+	}
 }

@@ -31,7 +31,7 @@ func TestMentorStudentsResponseMapsPaceContract(t *testing.T) {
 			CurriculumMonth:   2,
 			ActualLevel:       4,
 			Status:            "ONBOARDING",
-			Reasons:           []string{"ONBOARDING"},
+			Reasons:           []string{"ONBOARDING", "PACE_BELOW_MINIMUM"},
 		},
 	}}, time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC))
 
@@ -47,5 +47,8 @@ func TestMentorStudentsResponseMapsPaceContract(t *testing.T) {
 	}
 	if row.PaceStatus != "NOT_MEASURABLE" || row.SourceStatus != "active" {
 		t.Fatalf("status mapping failed: %+v", row)
+	}
+	if len(row.HealthReasonCodes) != 2 || row.HealthReasonCodes[0] != "NO_TIMELINE" || row.HealthReasonCodes[1] != "BELOW_MINIMUM_LEVEL" {
+		t.Fatalf("reason mapping failed: %+v", row.HealthReasonCodes)
 	}
 }

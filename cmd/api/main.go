@@ -1,48 +1,24 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 
+	"nextera-pulse/internal/app"
 	"nextera-pulse/internal/httpapi"
 	"nextera-pulse/internal/store"
 )
 
-func loadEnvFile(path string) {
-	f, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			k := strings.TrimSpace(parts[0])
-			v := strings.TrimSpace(parts[1])
-			if os.Getenv(k) == "" {
-				os.Setenv(k, v)
-			}
-		}
-	}
-}
-
 func main() {
-	loadEnvFile(".env")
+	app.LoadEnvFile(".env")
 	log.Println("=== Starting Nextera Pulse API Server ===")
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://postgres:postgres@127.0.0.1:5432/nextera_pulse?sslmode=disable"
+		dsn = "postgres://nextera_pulse:nextera_pulse@127.0.0.1:5432/nextera_pulse?sslmode=disable"
 		log.Println("Using local PostgreSQL default configuration")
 	} else {
 		log.Println("Connecting to configured database")
@@ -60,16 +36,26 @@ func main() {
 		log.Fatalf("Database migration failed: %v", err)
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	addr := os.Getenv("HTTP_ADDR")
+	if addr == "" {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		addr = port
+		if !strings.Contains(addr, ":") {
+			addr = ":" + addr
+		}
 	}
-	addr := ":" + port
 
 	server := httpapi.NewServer(db)
 
-	log.Printf("Nextera Pulse API listening on http://localhost%s", addr)
-	log.Println("Connected to PostgreSQL (nextera_pulse). Ready for Ziad's Frontend.")
+	if strings.HasPrefix(addr, ":") {
+		log.Printf("Nextera Pulse API listening on http://localhost%s", addr)
+	} else {
+		log.Printf("Nextera Pulse API listening on http://%s", addr)
+	}
+	log.Printf("Database ready (%s).", db.DriverName)
 	log.Println("Available endpoints:")
 	log.Println("  - GET  /health/live")
 	log.Println("  - GET  /health/ready")
