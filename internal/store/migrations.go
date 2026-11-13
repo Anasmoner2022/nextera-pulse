@@ -3,68 +3,31 @@ package store
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
+
+	"nextera-pulse/migrations"
 )
 
-// Migrate runs schema migrations and seeds default policies & timeline
-func (db *DB) Migrate(ctx context.Context, migrationPath string) error {
-	var sqlContent []byte
-	var err error
-
-	if migrationPath != "" {
-		sqlContent, err = os.ReadFile(migrationPath)
-		if err != nil {
-			return fmt.Errorf("failed to read migration file %s: %w", migrationPath, err)
-		}
-	} else {
-		// Default to embedded DDL string based on driver
-		if db.DriverName == "postgres" {
-			sqlContent, err = os.ReadFile("migrations/postgres.sql")
-		} else {
-			sqlContent, err = os.ReadFile("migrations/sqlite.sql")
-		}
-		if err != nil {
-			return fmt.Errorf("failed to load migration: %w", err)
-		}
+// Migrate applies the embedded PostgreSQL schema and adds any missing
+// default status policies. Every statement is idempotent, and nothing an
+// operator changed in the database is overwritten. Monthly targets are seeded
+// per curriculum event with SeedCurriculumTimeline.
+func (db *DB) Migrate(ctx context.Context) error {
+	schema := migrations.Postgres
+	if db.DriverName == "sqlite" {
+		schema = migrations.SQLite
 	}
-
-	_, err = db.ExecContext(ctx, string(sqlContent))
-	if err != nil {
+	if _, err := db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("failed to execute migration: %w", err)
 	}
-	if err := db.ensureStudentSourceRole(ctx); err != nil {
-		return err
-	}
-
-	// Seed status policies
 	if err := db.SeedStatusPolicy(ctx); err != nil {
 		return fmt.Errorf("failed to seed status policy: %w", err)
 	}
-
-	// Seed Event 97 official curriculum timeline
-	if err := db.SeedCurriculumTimeline(ctx); err != nil {
-		return fmt.Errorf("failed to seed curriculum timeline: %w", err)
-	}
-
 	return nil
 }
 
-// ensureStudentSourceRole adds the 01Edu role column on databases created
-// before that column existed. A repeated ALTER is expected and ignored.
-func (db *DB) ensureStudentSourceRole(ctx context.Context) error {
-	_, err := db.ExecContext(ctx, "ALTER TABLE students ADD COLUMN source_role TEXT NOT NULL DEFAULT ''")
-	if err == nil {
-		return nil
-	}
-	message := strings.ToLower(err.Error())
-	if strings.Contains(message, "duplicate column") || strings.Contains(message, "already exists") {
-		return nil
-	}
-	return fmt.Errorf("failed adding students.source_role: %w", err)
-}
-
-// SeedStatusPolicy inserts standard status policy if not present
+// SeedStatusPolicy inserts the default status policies that are missing.
+// Existing rows are never changed, so edits made in the database survive a
+// restart.
 func (db *DB) SeedStatusPolicy(ctx context.Context) error {
 	policies := []struct {
 		recordType            string
@@ -82,79 +45,13 @@ func (db *DB) SeedStatusPolicy(ctx context.Context) error {
 	}
 
 	for _, p := range policies {
-		var query string
-		if db.DriverName == "postgres" {
-			query = `INSERT INTO status_policy (record_type, pause_clock, exclude_from_active_kpis, description)
-                     VALUES ($1, $2, $3, $4)
-                     ON CONFLICT (record_type) DO UPDATE SET
-                        pause_clock = EXCLUDED.pause_clock,
-                        exclude_from_active_kpis = EXCLUDED.exclude_from_active_kpis,
-                        description = EXCLUDED.description;`
-		} else {
-			query = `INSERT INTO status_policy (record_type, pause_clock, exclude_from_active_kpis, description)
+		query := db.Rebind(`INSERT INTO status_policy (record_type, pause_clock, exclude_from_active_kpis, description)
                      VALUES (?, ?, ?, ?)
-                     ON CONFLICT (record_type) DO UPDATE SET
-                        pause_clock = excluded.pause_clock,
-                        exclude_from_active_kpis = excluded.exclude_from_active_kpis,
-                        description = excluded.description;`
-		}
+                     ON CONFLICT (record_type) DO NOTHING`)
 
 		_, err := db.ExecContext(ctx, query, p.recordType, p.pauseClock, p.excludeFromActiveKPIs, p.description)
 		if err != nil {
 			return fmt.Errorf("failed inserting status policy %s: %w", p.recordType, err)
-		}
-	}
-
-	return nil
-}
-
-// SeedCurriculumTimeline inserts official Event 97 monthly expectations
-func (db *DB) SeedCurriculumTimeline(ctx context.Context) error {
-	timeline := []struct {
-		month           int
-		minLevel        float64
-		expectedLevel   float64
-		checkpointLevel float64
-		rank            int
-		notes           string
-	}{
-		{2, 5.0, 7.0, 0.0, 1, "Month 2 Milestone"},
-		{4, 9.0, 13.0, 0.0, 2, "Month 4 Milestone"},
-		{5, 12.0, 17.0, 10.0, 3, "Month 5 Milestone"},
-		{6, 15.0, 18.0, 20.0, 4, "Month 6 Milestone"},
-		{7, 17.0, 20.0, 20.0, 5, "Month 7 Milestone"},
-		{8, 20.0, 23.0, 30.0, 6, "Month 8 Milestone"},
-		{10, 28.0, 34.0, 30.0, 7, "Month 10 Milestone"},
-		{12, 34.0, 38.0, 40.0, 8, "Month 12 Milestone"},
-		{18, 50.0, 62.0, 50.0, 9, "Month 18 Graduation Target"},
-	}
-
-	eventID := 97
-	for _, m := range timeline {
-		var query string
-		if db.DriverName == "postgres" {
-			query = `INSERT INTO curriculum_timeline (event_id, month, min_level, expected_level, checkpoint_level, rank, notes)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)
-                     ON CONFLICT (event_id, month) DO UPDATE SET
-                        min_level = EXCLUDED.min_level,
-                        expected_level = EXCLUDED.expected_level,
-                        checkpoint_level = EXCLUDED.checkpoint_level,
-                        rank = EXCLUDED.rank,
-                        notes = EXCLUDED.notes;`
-		} else {
-			query = `INSERT INTO curriculum_timeline (event_id, month, min_level, expected_level, checkpoint_level, rank, notes)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)
-                     ON CONFLICT (event_id, month) DO UPDATE SET
-                        min_level = excluded.min_level,
-                        expected_level = excluded.expected_level,
-                        checkpoint_level = excluded.checkpoint_level,
-                        rank = excluded.rank,
-                        notes = excluded.notes;`
-		}
-
-		_, err := db.ExecContext(ctx, query, eventID, m.month, m.minLevel, m.expectedLevel, m.checkpointLevel, m.rank, m.notes)
-		if err != nil {
-			return fmt.Errorf("failed inserting timeline for month %d: %w", m.month, err)
 		}
 	}
 

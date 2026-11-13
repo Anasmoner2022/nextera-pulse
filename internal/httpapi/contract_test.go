@@ -5,26 +5,37 @@ import (
 	"time"
 
 	"nextera-pulse/internal/model"
+	pulsesync "nextera-pulse/internal/sync"
 )
 
-func TestResolveMentorCohort(t *testing.T) {
-	cohort, event, ok := resolveMentorCohort(97)
-	if !ok || cohort != 4 || event != 97 {
-		t.Fatalf("event 97 should select the Second Cohort, got cohort=%d event=%d ok=%v", cohort, event, ok)
+func TestResolveCohortUsesTheConfiguredProgram(t *testing.T) {
+	def := pulsesync.DefaultProgram()
+	cohort, event, ok := def.ResolveCohort(pulsesync.DefaultEventID)
+	if !ok || cohort != def.DefaultCohortID() || event != pulsesync.DefaultEventID {
+		t.Fatalf("default event should select the pilot cohort, got cohort=%d event=%d ok=%v", cohort, event, ok)
 	}
-	if _, _, ok := resolveMentorCohort(99); ok {
+	if _, _, ok := def.ResolveCohort(99); ok {
 		t.Fatal("unknown id should not resolve")
+	}
+	custom := pulsesync.LiveCycleConfig{EventID: 120, Cohorts: []pulsesync.CohortLabel{{ID: 7, Label: "Cohort Seven"}, {ID: 8, Label: "Cohort Eight"}}}
+	for path, want := range map[int]int{120: 7, 7: 7, 8: 8} {
+		cohort, event, ok := custom.ResolveCohort(path)
+		if !ok || cohort != want || event != 120 {
+			t.Errorf("custom %d -> cohort=%d event=%d ok=%v, want %d/120", path, cohort, event, ok, want)
+		}
+	}
+	if _, _, ok := custom.ResolveCohort(pulsesync.DefaultEventID); ok {
+		t.Error("the default event must not resolve when another event is configured")
 	}
 }
 
 func TestMentorStudentsResponseMapsPaceContract(t *testing.T) {
 	enrolled := time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
-	payload := mentorStudentsResponse(97, []model.StudentPaceView{{
-		ID:         12,
-		Login:      "nour.ahmed",
-		FirstName:  "Nour",
-		LastName:   "Ahmed",
-		CohortName: "01 Coding - Second Cohort",
+	payload := mentorStudentsResponse(120, 7, "Cohort Seven", []model.StudentPaceView{{
+		ID:        12,
+		Login:     "nour.ahmed",
+		FirstName: "Nour",
+		LastName:  "Ahmed",
 		Pace: model.PaceMetrics{
 			EnrolledAt:        enrolled,
 			ActiveProgramDays: 40,
@@ -35,7 +46,7 @@ func TestMentorStudentsResponseMapsPaceContract(t *testing.T) {
 		},
 	}}, time.Date(2026, 11, 9, 0, 0, 0, 0, time.UTC))
 
-	if payload.EventID != 97 || payload.CohortName != "01 Coding - Second Cohort" {
+	if payload.EventID != 120 || payload.CohortID != 7 || payload.CohortName != "Cohort Seven" {
 		t.Fatalf("unexpected envelope: %+v", payload)
 	}
 	if len(payload.Students) != 1 {

@@ -1,4 +1,4 @@
-import type { StudentPaceRow, StudentsResponse } from '../domain';
+import type { StatusPolicy, StudentPaceRow, StudentsResponse } from '../domain';
 
 // Synthetic demo rows only; replace with the agreed API adapter.
 const demoContacts: Record<string, Pick<StudentPaceRow, 'email' | 'age' | 'phone'>> = {
@@ -35,3 +35,18 @@ export const mockStudents: StudentsResponse = {
     { studentId: 9713, login: 'mariam.fathy', displayName: 'Mariam Fathy', enrolledAt: '2026-07-12', activeAcademicDays: 44, curriculumMonth: 2, curriculumRound: 1, actualLevel: 3, minimumLevel: 4, expectedLevel: 5, checkpointTarget: 5, gapToMinimum: -1, gapToExpected: -2, paceStatus: 'PAUSED', sourceStatus: 'ban', healthReasonCodes: ['CURRENTLY_PAUSED'] },
   ] satisfies StudentPaceRow[]).map(student => ({ ...student, ...demoContacts[student.login] })),
 };
+
+/**
+ * Demo copy of the backend's status_policy seed (internal/store/migrations.go),
+ * used only to compute the on-track rate on mock data. Live mode reads the
+ * real table on the server.
+ */
+export const mockStatusPolicy: StatusPolicy[] = [
+  { recordType: 'away', excludeFromActiveKpis: false },
+  { recordType: 'restricted', excludeFromActiveKpis: true },
+  { recordType: 'blocked-long', excludeFromActiveKpis: true },
+  { recordType: 'temporary-notice', excludeFromActiveKpis: false },
+  { recordType: 'left-school', excludeFromActiveKpis: true },
+  { recordType: 'observation', excludeFromActiveKpis: false },
+  { recordType: 'ban', excludeFromActiveKpis: true },
+];

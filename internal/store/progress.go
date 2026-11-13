@@ -52,7 +52,7 @@ func (db *DB) ProgressBoard(ctx context.Context, cohortID int, eventID int, only
 		SELECT s.id, s.login, TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')), COALESCE(m.mentor_name, '')
 		FROM students s
 		JOIN student_events se ON se.student_id = s.id
-		LEFT JOIN mentor_assignments m ON m.student_id = s.id AND m.is_primary = TRUE
+		LEFT JOIN mentor_assignments m ON m.student_id = s.id AND m.is_primary = TRUE AND m.ends_at IS NULL
 		WHERE se.event_id = ?`
 	args := []any{eventID}
 	if cohortID > 0 {

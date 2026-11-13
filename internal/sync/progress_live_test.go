@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"nextera-pulse/internal/store/pgtest"
 	"testing"
 
 	"nextera-pulse/internal/store"
@@ -9,13 +10,13 @@ import (
 )
 
 func TestApplyLiveProgressUpdatesDoneFlag(t *testing.T) {
-	db, err := store.Connect(":memory:")
+	db, err := store.Connect(pgtest.DSN(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 	ctx := context.Background()
-	if err := db.Migrate(ctx, "../../migrations/sqlite.sql"); err != nil {
+	if err := db.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO students (source_user_id, login, first_name, last_name, email, source_role, created_at, updated_at) VALUES (42, 'learner', 'Learner', 'One', 'learner@example.com', 'user', '2026-01-01', '2026-01-01')`); err != nil {

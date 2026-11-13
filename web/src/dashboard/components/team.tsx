@@ -96,6 +96,18 @@ function MentorPicker({
           {isSelected && <span className="mentor-picker-check" aria-hidden="true">✓</span>}
         </button>;
       })}
+      {current && <button
+        className="mentor-picker-option mentor-picker-remove"
+        type="button"
+        role="option"
+        aria-selected={false}
+        onClick={() => {
+          onAssign(current, student.login, false);
+          setOpen(false);
+        }}
+      >
+        <span className="mentor-picker-option-info"><b>{ar ? 'إلغاء إسناد المنتور' : 'Remove mentor'}</b><small>{ar ? 'يبقى في سجل الإسناد' : 'Stays in the assignment history'}</small></span>
+      </button>}
       {!mentors.length && <p className="mentor-picker-empty">{ar ? 'لا يوجد منتورز متاحون' : 'No mentors available'}</p>}
     </div>}
   </div>;

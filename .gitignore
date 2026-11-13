@@ -2,10 +2,8 @@
 .env
 .env.*
 !.env.example
-*.sqlite
-*.sqlite-wal
-*.sqlite-shm
-NextEra-All-Cohorts-*.zip
+# Never commit 01Edu exports (student data); Pulse does not read them.
+*.zip
 
 # Go
 bin/

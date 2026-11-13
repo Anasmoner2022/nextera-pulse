@@ -1,3 +1,7 @@
+NOTE (2026-11-13): historical document. The zip export loader (section 3) and SQLite
+support were removed; 01Edu live sync is the only data source and PostgreSQL the only
+database. See docs/LIVE_DATA.md.
+
 ================================================================================
 NEXTERA PULSE — BACKEND & PACE ENGINE HANDOVER SPECIFICATION FOR CODEX
 ================================================================================
@@ -21,8 +25,14 @@ operational intelligence to tell mentors:
   (3) What is the exact reason?
   (4) What intervention should be taken?
 
-The North Star Metric for the project is the "On-Track Rate" (% of students at
-or above the configured minimum level for their active curriculum month).
+The North Star Metric for the project is the "On-Track Rate":
+    on-track rate = GREEN students / measurable students
+GREEN = at or above the EXPECTED level for the active curriculum month.
+Measurable = pace status GREEN, YELLOW or RED, and a source status that
+status_policy does not flag exclude_from_active_kpis. YELLOW ("Watch") is not
+on track. No measurable students gives null, not 0%. (Changed in review C4:
+this line used to say "at or above the configured minimum level"; see
+docs/ON_TRACK_RATE.md.)
 
 Sprint 1's goal is "Trust Pace": Prove that for the pilot cohort (Cohort 4,
 Event 97, 52 students), the system can accurately and deterministically compute
@@ -33,7 +43,7 @@ Ziad's React frontend via a clean REST API.
 
 2. ARCHITECTURE & CURRENT TECH STACK
 --------------------------------------------------------------------------------
-- Language: Go 1.22+ (using native net/http routing introduced in Go 1.22)
+- Language: Go 1.26.2 (go.mod; native net/http routing from Go 1.22). Web: Node.js 22 LTS (.nvmrc).
 - Database: PostgreSQL 16 (native target via github.com/lib/pq)
             Fallback SQLite support (modernc.org/sqlite) is maintained in the
             store layer for zero-dependency local testing.
@@ -43,16 +53,15 @@ Ziad's React frontend via a clean REST API.
   * internal/model/types.go    -> Core domain entities and API DTOs
   * internal/pace/engine.go    -> Deterministic Pace Engine
   * internal/pace/engine_test.go -> Pace Engine mathematical unit tests
-  * internal/store/db.go       -> DB connection & driver detection
+  * internal/store/db.go       -> PostgreSQL connection (DATABASE_URL must be postgres://)
   * internal/store/migrations.go -> SQL migration & policy/milestone seeders
   * internal/store/student_store.go -> Queries, upserts, snapshots, aggregates
   * internal/store/time.go     -> RFC3339 timestamp normalizer
-  * internal/sync/loader.go    -> Zip archive parser and ingestion pipeline
+  * internal/sync/live_cycle.go -> 01Edu live sync cycle (the zip loader was removed 2026-11-13)
   * internal/httpapi/server.go -> HTTP handlers, CORS middleware, response envelopes
-  * migrations/postgres.sql    -> PostgreSQL DDL
-  * migrations/sqlite.sql      -> SQLite DDL
+  * migrations/postgres.sql    -> PostgreSQL DDL (embedded; the only schema file)
   * Dockerfile                 -> Multi-stage production container build
-  * docker-compose.yml         -> PostgreSQL 16 + API orchestration
+  * docker-compose.yml         -> PostgreSQL 17 + API orchestration
 
 
 3. BYPASSING THE GRAPHQL SYNC WORKER VIA ANAS'S EXPORT
@@ -148,6 +157,8 @@ Live Database Numbers (Cohort 4 - Second Cohort, 52 Students):
   * Onboarding Students: 11 (joined Oct 2026, active age <= 30 days)
   * Off-Track Students (RED): 40 (joined 5-7 months ago, level < month 5-7 min)
   * On-Track Rate (North Star): 0% (accurately reflects that students are behind)
+    [Historical figure. The rate is now GREEN / measurable students; see
+    docs/ON_TRACK_RATE.md.]
 
 
 6. TECHNICAL PITFALLS & ISSUES RESOLVED (THE "FAILED" PARTS)
@@ -225,17 +236,24 @@ CORS: Enabled (*, supports localhost:5173 for Vite)
         "cohortId": 4,
         "cohortName": "01 Coding - Second Cohort",
         "totalStudents": 52,
-        "activeStudents": 51,
-        "pausedStudents": 1,
+        "measurableStudents": 40,
         "onTrackCount": 0,
         "nearTrackCount": 0,
         "offTrackCount": 40,
         "onTrackRate": 0,
-        "expectedLevelRate": 0,
         "statusCounts": {"ONBOARDING": 11, "PAUSED": 1, "RED": 40},
+        "kpi": {"scope": "cohort", "onTrack": 0, "measurable": 40, "rate": 0,
+                "hasMeasurable": true, "total": 52, "excludedByPolicy": 1, ...},
         "calculatedAt": "2026-10-21T20:34:08Z"
       }
     }
+
+    onTrackRate = GREEN / measurable students (null when none are measurable).
+    A mentor gets the summary for their own students only.
+
+(D2) GET /api/v1/kpi/on-track
+    Manager: program, per-cohort and per-mentor on-track KPI. Mentor: only
+    their own. See docs/ON_TRACK_RATE.md for the response.
 
 (E) GET /api/v1/students
     Query Params:

@@ -1,28 +1,32 @@
-version: '3.8'
-
+# Production-like stack: PostgreSQL + API.
+# Secrets come from the repo-root .env (gitignored); see .env.example.
 services:
   postgres:
-    image: postgres:16-alpine
-    container_name: pulse-postgres
-    restart: always
+    image: postgres:17-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: nextera_pulse
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-nextera_pulse}
+      POSTGRES_USER: ${POSTGRES_USER:-nextera_pulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Not published to the host; only the API reaches it.
 
   api:
     build: .
-    container_name: pulse-api
-    restart: always
+    restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+    env_file: .env
     environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/nextera_pulse?sslmode=disable
-      PORT: 8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-nextera_pulse}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-nextera_pulse}?sslmode=disable
+      HTTP_ADDR: ":8080"
     ports:
       - "8080:8080"
 

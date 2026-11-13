@@ -28,6 +28,10 @@ Vite prints the local URL (usually `http://localhost:5173`). `npm run build` typ
 - Pace status, gaps, timeline values and reason codes are displayed from the data source. The frontend does not calculate pace.
 - The default source is synthetic demo data, explicitly labelled in the UI. It is not pilot/student data.
 
+## Live data
+
+With `VITE_STUDENTS_SOURCE=api` (default) the app reads the Go API through the Vite proxy. The API syncs from 01Edu server-side (see `../docs/LIVE_DATA.md`); the header badge shows whether rows are live, offline (last synced data), or demo, using `GET /api/v1/sync/status`, and reloads after each sync. No 01Edu credentials belong in this app.
+
 ## Backend integration still needs a contract
 
 `src/data/students.ts` is the adapter boundary. `VITE_STUDENTS_SOURCE=mock` (default) uses the demo API response; `VITE_STUDENTS_SOURCE=api` calls `GET /api/v1/cohorts/97/students` on `VITE_API_BASE_URL` and sends cookies for a same-site session. The first API contract represented here is `{ cohortName, eventId, snapshotDate, students }`. Each student includes pace metrics from the server plus `sourceStatus` from 01Edu. Confirm pagination, filters, exact DTO names, session behavior, and error format with the backend before production integration. Never put 01Edu credentials in this app; access 01Edu through the backend only.

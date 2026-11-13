@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { StudentPaceRow } from '../../domain';
 import { getCohortProgress, getStudentProgress, usesLiveApi, type ProgressBoard } from '../../data/students';
+import { useSyncStatus } from '../../data/syncStatus';
 import type { PulseAccount } from '../../identity';
 import { findAssignedMentor } from '../../studentAccountLink.js';
 import type { Language } from '../config';
@@ -35,23 +36,25 @@ function studentInitials(student: StudentPaceRow) {
 type ProjectProgressProps = { rows: StudentPaceRow[]; accounts: PulseAccount[]; mentors: PulseAccount[]; lang: Language; view: 'cohort' | 'student'; onSelectStudent?: (student: StudentPaceRow) => void };
 
 export function ProjectProgress(props: ProjectProgressProps) {
-  if (usesLiveApi()) return <ArchiveProjectProgress {...props} />;
+  if (usesLiveApi()) return <LiveProjectProgress {...props} />;
   return <DemoProjectProgress {...props} />;
 }
 
-function ArchiveProjectProgress({ rows, lang, view, onSelectStudent }: ProjectProgressProps) {
+function LiveProjectProgress({ rows, lang, view, onSelectStudent }: ProjectProgressProps) {
   const ar = lang === 'ar';
   const studentId = view === 'student' ? rows[0]?.studentId : undefined;
   const [board, setBoard] = useState<ProgressBoard | null>(null);
   const [failed, setFailed] = useState(false);
+  // Reload the board after each successful backend live sync.
+  const syncKey = useSyncStatus().status?.lastSuccessAt ?? '';
   useEffect(() => {
     let live = true;
-    setBoard(null);
     setFailed(false);
     const load = studentId ? getStudentProgress(studentId) : getCohortProgress();
     load.then(next => { if (live) setBoard(next); }).catch(() => { if (live) setFailed(true); });
     return () => { live = false; };
-  }, [studentId]);
+  }, [studentId, syncKey]);
+  useEffect(() => { setBoard(null); }, [studentId]);
   const students = board?.students ?? [];
   const projects = board?.projects ?? [];
   const doneCells = students.reduce((sum, student) => sum + student.completed, 0);
@@ -59,10 +62,10 @@ function ArchiveProjectProgress({ rows, lang, view, onSelectStudent }: ProjectPr
   const completionRate = totalCells ? Math.round(doneCells / totalCells * 100) : 0;
   const visible = view === 'student' ? students.filter(student => student.studentId === studentId) : students;
   return <section className={`table-panel project-progress ${view === 'cohort' ? 'project-progress-cohort' : 'project-progress-student'}`}>
-    <header className="project-progress-heading"><div><span className="eyebrow">{ar ? 'تقدم المشاريع' : 'PROJECT PROGRESS'}</span><h2>{view === 'cohort' ? (ar ? 'إنجاز مشاريع الكوهورت' : 'Cohort project progress') : (ar ? 'مشاريعك' : 'Your projects')}</h2><p>{board?.syncedAt ? (ar ? 'المربع يُملأ من سجل 01Edu المباشر.' : 'A square is filled from the live 01Edu record.') : (ar ? 'المربع يُملأ من أرشيف 01Edu إلى أن يحدّثه منتور أو مدير البرنامج.' : 'A square is filled from the 01Edu archive until a mentor or program manager signs in and refreshes it.')}</p></div><span className="project-demo-tag"><i />{board?.syncedAt ? (ar ? '01Edu مباشر' : 'Live 01Edu') : '01Edu'}</span></header>
-    {failed && <p className="project-empty">{ar ? 'تعذر تحميل تقدم المشاريع من الأرشيف.' : 'Project progress could not be loaded from the archive.'}</p>}
+    <header className="project-progress-heading"><div><span className="eyebrow">{ar ? 'تقدم المشاريع' : 'PROJECT PROGRESS'}</span><h2>{view === 'cohort' ? (ar ? 'إنجاز مشاريع الكوهورت' : 'Cohort project progress') : (ar ? 'مشاريعك' : 'Your projects')}</h2><p>{board?.syncedAt ? (ar ? 'المربع يُملأ من سجل 01Edu المباشر.' : 'A square is filled from the live 01Edu record.') : (ar ? 'المربع يُملأ من آخر مزامنة مع 01Edu.' : 'A square is filled from the last 01Edu sync.')}</p></div><span className="project-demo-tag"><i />{board?.syncedAt ? (ar ? '01Edu مباشر' : 'Live 01Edu') : '01Edu'}</span></header>
+    {failed && <p className="project-empty">{ar ? 'تعذر تحميل تقدم المشاريع.' : 'Project progress could not be loaded.'}</p>}
     {!failed && !board && <p className="project-empty">{ar ? 'جارٍ التحميل من 01Edu…' : 'Loading project records from 01Edu…'}</p>}
-    {board && projects.length === 0 && <p className="project-empty">{ar ? 'لا توجد مشاريع من النوع project في أرشيف 01Edu لهذا الكوهورت.' : 'The 01Edu archive has no project records for this cohort.'}</p>}
+    {board && projects.length === 0 && <p className="project-empty">{ar ? 'لا توجد مشاريع من النوع project من 01Edu لهذا الكوهورت بعد.' : 'No 01Edu project records have been synced for this cohort yet.'}</p>}
     {board && projects.length > 0 && <>
       <div className="project-overall-progress"><div><b>{completionRate}%</b><span>{ar ? `${doneCells} من ${totalCells} خلية منتهية` : `${doneCells} of ${totalCells} project cells are done`}</span></div><div className="project-overall-track"><i style={{ width: `${completionRate}%` }} /></div></div>
       <details className="project-key"><summary>{ar ? `أسماء المشاريع (${projects.length})` : `Project names (${projects.length})`}</summary><div>{projects.map((project, index) => <span key={project.id}><b>{`P${index + 1}`}</b>{project.name}</span>)}</div></details>

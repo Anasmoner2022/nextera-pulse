@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { isInActiveKpiPopulation } from '../../domain';
+import { describeOnTrack } from '../../domain';
 import type { PaceStatus, StudentPaceRow } from '../../domain';
 import { ProfileAvatar } from '../../identity';
 import type { PulseAccount } from '../../identity';
@@ -8,16 +8,20 @@ import { ProjectProgress } from './project-progress';
 import { findAssignedMentor } from '../../studentAccountLink.js';
 import { normalizeLogin, statusNames, statuses, text } from '../config';
 import type { Intervention, Language } from '../config';
+import type { OnTrackKpis } from '../onTrack';
 
 // Keep a single presentation primitive for the high-level workspace metrics.
-export function Stat({ icon, label, value, foot, color }: { icon: string; label: string; value: number; foot: string; color: string ;}) { return <article className="stat-card"><div className={`stat-icon ${color}`}>{icon}</div><span className="stat-label">{label}</span><strong>{value}</strong><small>{foot}</small><span className="stat-spark">⌁</span></article> ;}
+export function Stat({ icon, label, value, foot, color }: { icon: string; label: string; value: number | string; foot: string; color: string ;}) { return <article className="stat-card"><div className={`stat-icon ${color}`}>{icon}</div><span className="stat-label">{label}</span><strong>{value}</strong><small>{foot}</small><span className="stat-spark">⌁</span></article> ;}
 
 // Summarize mentor assignments and cohort health for the program manager.
-export function ManagerOverview({ mentors, rows, interventions, lang, onOpenTeam, onOpenMentor }: { mentors: PulseAccount[]; rows: StudentPaceRow[]; interventions: Intervention[]; lang: Language; onOpenTeam?: () => void; onOpenMentor?: (mentor: PulseAccount) => void ;}) {
+export function ManagerOverview({ mentors, rows, interventions, lang, kpis, onOpenTeam, onOpenMentor }: { mentors: PulseAccount[]; rows: StudentPaceRow[]; interventions: Intervention[]; lang: Language; kpis: OnTrackKpis; onOpenTeam?: () => void; onOpenMentor?: (mentor: PulseAccount) => void ;}) {
   const ar = lang === 'ar';
   const assigned = new Set(mentors.flatMap(mentor => mentor.assignedStudentLogins ?? []).map(normalizeLogin));
   const unassigned = rows.filter(row => !assigned.has(normalizeLogin(row.login)));
+  // On-track rate = GREEN / measurable students, from the server in live mode.
+  const program = describeOnTrack(kpis, kpis.program);
   const metrics = [
+    { icon: '◎', label: ar ? 'على المسار' : 'On-track rate', value: program.value, note: program.foot, tone: program.tone === 'error' ? 'amber' : 'green' },
     { icon: '✦', label: ar ? 'المنتورز' : 'Mentors', value: mentors.length, note: ar ? 'حسابات الفريق' : 'Team accounts', tone: 'mint' },
     { icon: '♙', label: ar ? 'إجمالي الطلاب' : 'Total students', value: rows.length, note: ar ? 'في البرنامج' : 'In the program', tone: 'blue' },
     { icon: '＋', label: ar ? 'طلاب دون منتور' : 'Unassigned students', value: unassigned.length, note: ar ? 'يحتاجون توزيعًا' : 'Need an assignment', tone: unassigned.length ? 'amber' : 'green' },
@@ -31,17 +35,17 @@ export function ManagerOverview({ mentors, rows, interventions, lang, onOpenTeam
     <div className="manager-mentor-grid">{mentors.map(mentor => {
       const loginSet = new Set((mentor.assignedStudentLogins ?? []).map(normalizeLogin));
       const assignedRows = rows.filter(row => loginSet.has(normalizeLogin(row.login)));
-      const activeAssigned = assignedRows.filter(isInActiveKpiPopulation);
-      const onTrack = activeAssigned.filter(row => row.paceStatus === 'GREEN').length;
-      const attention = activeAssigned.filter(row => row.paceStatus === 'YELLOW' || row.paceStatus === 'RED').length;
+      // The mentor's current students, measured on the server (live) or the shared formula (demo).
+      const mentorKpi = kpis.mentors[mentor.id];
+      const rate = describeOnTrack(kpis, mentorKpi);
+      const shown = (value?: number) => kpis.status === 'ready' ? value ?? 0 : '—';
       const followUps = interventions.filter(item => assignedRows.some(row => row.studentId === item.studentId)).length;
       const capacity = mentor.capacityLimit ?? assignedRows.length;
       const load = capacity > 0 ? Math.min(100, Math.round(assignedRows.length / capacity * 100)) : 0;
-      const onTrackRate = activeAssigned.length ? Math.round(onTrack / activeAssigned.length * 100) : 0;
       return <article className="manager-mentor-card" key={mentor.id}>
-        <div className="manager-mentor-head"><ProfileAvatar account={mentor} size="medium" /><div><b>{mentor.name}</b><small>{mentor.email}</small></div><span className="manager-track-rate">{onTrackRate}%<small>{ar ? 'على المسار' : 'on track'}</small></span></div>
+        <div className="manager-mentor-head"><ProfileAvatar account={mentor} size="medium" /><div><b>{mentor.name}</b><small>{mentor.email}</small></div><span className="manager-track-rate" title={rate.foot}>{rate.value}<small>{rate.tone === 'ready' ? rate.foot : rate.tone === 'empty' ? (ar ? 'لا يوجد طلاب قابلون للقياس' : 'no measurable students') : rate.tone === 'error' ? (ar ? 'غير متاح' : 'unavailable') : (ar ? 'جارٍ التحميل' : 'loading')}</small></span></div>
         <div className="manager-load-label"><span>{ar ? 'توزيع الطلاب' : 'Student load'}</span><b>{assignedRows.length} / {mentor.capacityLimit ?? '—'}</b></div><div className="manager-load-track"><i style={{ width: `${load}%` }} /></div>
-        <div className="manager-mentor-stats"><div><small>{ar ? 'طلاب على المسار' : 'On track'}</small><b>{onTrack}</b></div><div><small>{ar ? 'محتاجين متابعة' : 'Need attention'}</small><b>{attention}</b></div><div><small>{ar ? 'متابعات' : 'Follow-ups'}</small><b>{followUps}</b></div></div>
+        <div className="manager-mentor-stats"><div><small>{ar ? 'طلاب على المسار' : 'On track'}</small><b>{shown(mentorKpi?.onTrack)}</b></div><div><small>{ar ? 'مراقبة' : 'Watch'}</small><b>{shown(mentorKpi?.measurableCounts.YELLOW)}</b></div><div><small>{ar ? 'متأخرون' : 'Off pace'}</small><b>{shown(mentorKpi?.measurableCounts.RED)}</b></div><div><small>{ar ? 'متابعات' : 'Follow-ups'}</small><b>{followUps}</b></div></div>
         {onOpenMentor && <button type="button" className="mentor-open-workspace" onClick={() => onOpenMentor(mentor)}>{ar ? 'فتح مساحة المنتور' : 'Open mentor workspace'} <span aria-hidden="true">→</span></button>}
       </article>;
     })}{mentors.length === 0 && <div className="empty-state"><b>{ar ? 'لا توجد حسابات منتورز حتى الآن' : 'No mentor accounts yet.'}</b></div>}</div>

@@ -1,3 +1,5 @@
+> **Superseded (2026-11-13):** see [docs/LIVE_DATA.md](docs/LIVE_DATA.md) for the scheduled live sync. `PILOT_COHORT_ID` is replaced by `PILOT_COHORTS`; the zip import was removed.
+
 # Nextera Pulse — Live GraphQL Database Sync implementation (2026-10-27)
 
 ## Implemented
@@ -8,7 +10,7 @@
 ## Not yet implemented / not verified
 - **NOT a full GraphQL Database Sync**: no live Event 97 curriculum config sync; no live records/progress/transactions, scheduled jobs, or post-sync pace snapshot calculation.
 - No live 01Edu connection was tested (endpoint and credentials not available in the environment).
-- Project-wide Go tests could not run: local Go 1.23.2 < required 1.26.2 and proxy.golang.org DNS unavailable for dependencies.
+- Project-wide Go tests could not run then (local Go 1.23.2 < required 1.26.2, no module proxy). Resolved: the full suite now runs on Go 1.26.2+ against PostgreSQL 17.
 - The GraphQL event_user fields must be checked against the live Hasura schema; current client assumes `userLogin` and numeric `level` fields.
 - `RefreshPilotLevels` updates levels but existing snapshots remain stale; the API uses snapshots, so this refresh does NOT immediately change mentor dashboard pace values.
 - No scheduled worker: run manually only until stale snapshot and full sync behavior are addressed.

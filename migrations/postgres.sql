@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS students (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Databases created before source_role existed.
+ALTER TABLE students ADD COLUMN IF NOT EXISTS source_role TEXT NOT NULL DEFAULT '';
+
 CREATE TABLE IF NOT EXISTS source_events (
     id SERIAL PRIMARY KEY,
     source_event_id INTEGER UNIQUE NOT NULL,
@@ -51,8 +54,7 @@ CREATE TABLE IF NOT EXISTS curriculum_timeline (
     expected_level DOUBLE PRECISION NOT NULL,
     checkpoint_level DOUBLE PRECISION NOT NULL DEFAULT 0,
     rank INTEGER DEFAULT 0,
-    notes TEXT,
-    CONSTRAINT uq_event_month UNIQUE (event_id, month)
+    notes TEXT
 );
 
 CREATE TABLE IF NOT EXISTS student_source_records (
@@ -210,3 +212,106 @@ CREATE TABLE IF NOT EXISTS cohort_label_users (
 );
 
 CREATE INDEX IF NOT EXISTS idx_label_users_user ON cohort_label_users(source_user_id, label_id);
+
+-- Server-side sessions issued after a successful 01Edu sign-in. Only a
+-- SHA-256 hash of the cookie token is stored.
+CREATE TABLE IF NOT EXISTS app_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    student_id BIGINT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    user_agent TEXT NOT NULL DEFAULT '',
+    ip TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_sessions_expires ON app_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_app_sessions_student ON app_sessions(student_id);
+
+-- Follow-up author: interventions.mentor_id is the signed-in author's person id
+-- (taken from the session); author_role is their Pulse role at the time.
+ALTER TABLE interventions ADD COLUMN IF NOT EXISTS author_role TEXT NOT NULL DEFAULT '';
+
+-- Mentor-assignment history (review C1, D2). A move or unassign closes the
+-- current row (ends_at) instead of deleting it, so the history is kept.
+-- assigned_by / ended_by are the signed-in manager's person id (NULL for the
+-- automatic assignment after a live sync).
+ALTER TABLE mentor_assignments ADD COLUMN IF NOT EXISTS reason TEXT NOT NULL DEFAULT '';
+ALTER TABLE mentor_assignments ADD COLUMN IF NOT EXISTS assigned_by BIGINT REFERENCES students(id) ON DELETE SET NULL;
+ALTER TABLE mentor_assignments ADD COLUMN IF NOT EXISTS ended_by BIGINT REFERENCES students(id) ON DELETE SET NULL;
+ALTER TABLE mentor_assignments ADD COLUMN IF NOT EXISTS end_reason TEXT NOT NULL DEFAULT '';
+
+-- Older databases could hold several open rows for one student: keep the
+-- newest open, close the rest, so the unique index below can be built.
+UPDATE mentor_assignments m
+SET ends_at = NOW(), end_reason = 'closed: duplicate current assignment'
+WHERE m.ends_at IS NULL AND m.is_primary AND EXISTS (
+    SELECT 1 FROM mentor_assignments n
+    WHERE n.student_id = m.student_id AND n.ends_at IS NULL AND n.is_primary
+      AND (n.starts_at > m.starts_at OR (n.starts_at = m.starts_at AND n.id > m.id))
+);
+
+-- At most one current primary mentor per student.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_mentor_assignments_current
+    ON mentor_assignments(student_id) WHERE is_primary AND ends_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_mentor_assignments_mentor_current
+    ON mentor_assignments(mentor_id) WHERE ends_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_mentor_assignments_student_history
+    ON mentor_assignments(student_id, starts_at DESC);
+
+-- mentor_id is the mentor's students.id. The FK is added NOT VALID (enforced
+-- for new rows) and validated when the existing rows allow it.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_mentor_assignments_mentor'
+                   AND conrelid = 'mentor_assignments'::regclass) THEN
+        ALTER TABLE mentor_assignments ADD CONSTRAINT fk_mentor_assignments_mentor
+            FOREIGN KEY (mentor_id) REFERENCES students(id) NOT VALID;
+    END IF;
+    BEGIN
+        ALTER TABLE mentor_assignments VALIDATE CONSTRAINT fk_mentor_assignments_mentor;
+    EXCEPTION WHEN foreign_key_violation THEN
+        RAISE NOTICE 'mentor_assignments has rows whose mentor is not a known person; FK stays NOT VALID';
+    END;
+END $$;
+
+-- Follow-up deletion is a soft delete: the note is hidden from every list but
+-- kept for the record, with who removed it and when.
+ALTER TABLE interventions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE interventions ADD COLUMN IF NOT EXISTS deleted_by BIGINT REFERENCES students(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_interventions_visible ON interventions(created_at DESC) WHERE deleted_at IS NULL;
+
+-- Versioned monthly targets. Each version belongs to one curriculum event and
+-- is a draft until Product approves it. The pace engine uses the latest
+-- approved version of the configured event, else the latest draft. Startup
+-- never overwrites targets (see store.SeedCurriculumTimeline).
+CREATE TABLE IF NOT EXISTS curriculum_timeline_versions (
+    id BIGSERIAL PRIMARY KEY,
+    event_id INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approved', 'retired')),
+    notes TEXT NOT NULL DEFAULT '',
+    approved_by TEXT,
+    approved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_timeline_version_label UNIQUE (event_id, label)
+);
+
+ALTER TABLE curriculum_timeline ADD COLUMN IF NOT EXISTS version_id BIGINT REFERENCES curriculum_timeline_versions(id) ON DELETE CASCADE;
+ALTER TABLE curriculum_timeline DROP CONSTRAINT IF EXISTS uq_event_month;
+
+-- Rows from before versioning are the old placeholder seed: file them under
+-- "draft-v0" for their event.
+INSERT INTO curriculum_timeline_versions (event_id, label, status, notes)
+SELECT DISTINCT event_id, 'draft-v0', 'draft',
+       'Pre-existing placeholder targets awaiting Product sign-off. NOT official.'
+FROM curriculum_timeline WHERE version_id IS NULL
+ON CONFLICT (event_id, label) DO NOTHING;
+UPDATE curriculum_timeline t SET version_id = v.id
+FROM curriculum_timeline_versions v
+WHERE t.version_id IS NULL AND v.event_id = t.event_id AND v.label = 'draft-v0';
+ALTER TABLE curriculum_timeline ALTER COLUMN version_id SET NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_timeline_version_month ON curriculum_timeline(version_id, month);
+CREATE INDEX IF NOT EXISTS idx_timeline_versions_event ON curriculum_timeline_versions(event_id, status, created_at DESC);

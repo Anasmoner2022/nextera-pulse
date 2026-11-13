@@ -40,7 +40,16 @@ func ParseFlexibleTime(s string) time.Time {
 	return time.Time{}
 }
 
-// FormatTime formats a time.Time into standard RFC3339 string for SQLite/Postgres
+// NullableTime returns nil for a zero time so PostgreSQL stores NULL instead
+// of rejecting an empty timestamptz string.
+func NullableTime(t time.Time) any {
+	if t.IsZero() {
+		return nil
+	}
+	return t.UTC()
+}
+
+// FormatTime formats a time.Time as RFC3339 (UTC). A zero time becomes "".
 func FormatTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
@@ -49,7 +58,7 @@ func FormatTime(t time.Time) string {
 }
 
 // FlexibleTime scans either a TEXT timestamp or a driver time.Time.
-// SQLite stores timestamps as text. PostgreSQL returns time.Time for timestamptz.
+// PostgreSQL returns time.Time for timestamptz; text values are parsed leniently.
 type FlexibleTime struct {
 	Time time.Time
 }

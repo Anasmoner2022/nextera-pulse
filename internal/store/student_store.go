@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"nextera-pulse/internal/model"
+	"nextera-pulse/internal/pace"
 )
 
-// Rebind converts '?' placeholders to '$1, $2' if using Postgres
+// Rebind converts '?' placeholders to PostgreSQL's $1, $2, ...
+// SQLite keeps the '?' markers.
 func (db *DB) Rebind(query string) string {
-	if db.DriverName != "postgres" {
+	if db != nil && db.DriverName == "sqlite" {
 		return query
 	}
 	var b strings.Builder
@@ -41,22 +43,9 @@ func (db *DB) UpsertStudent(ctx context.Context, s model.Student) (int64, error)
                 email = excluded.email,
                 updated_at = excluded.updated_at`
 
-	if db.DriverName == "postgres" {
-		query += " RETURNING id;"
-		q := db.Rebind(query)
-		var id int64
-		err := db.QueryRowContext(ctx, q, s.SourceUserID, s.Login, s.FirstName, s.LastName, s.Email, s.CreatedAt, s.UpdatedAt).Scan(&id)
-		return id, err
-	}
-
-	q := db.Rebind(query)
-	_, err := db.ExecContext(ctx, q, s.SourceUserID, s.Login, s.FirstName, s.LastName, s.Email, FormatTime(s.CreatedAt), FormatTime(s.UpdatedAt))
-	if err != nil {
-		return 0, err
-	}
-
+	query += " RETURNING id"
 	var id int64
-	err = db.QueryRowContext(ctx, "SELECT id FROM students WHERE source_user_id = ?", s.SourceUserID).Scan(&id)
+	err := db.QueryRowContext(ctx, db.Rebind(query), s.SourceUserID, s.Login, s.FirstName, s.LastName, s.Email, s.CreatedAt, s.UpdatedAt).Scan(&id)
 	return id, err
 }
 
@@ -71,7 +60,7 @@ func (db *DB) UpsertStudentEvent(ctx context.Context, se model.StudentEvent) err
                 last_synced_at = excluded.last_synced_at;`
 
 	q := db.Rebind(query)
-	_, err := db.ExecContext(ctx, q, se.StudentID, se.EventID, se.CohortID, FormatTime(se.EnrolledAt), se.CurrentLevel, se.AuditRatio, FormatTime(se.LastSyncedAt))
+	_, err := db.ExecContext(ctx, q, se.StudentID, se.EventID, se.CohortID, NullableTime(se.EnrolledAt), se.CurrentLevel, se.AuditRatio, NullableTime(se.LastSyncedAt))
 	return err
 }
 
@@ -85,13 +74,17 @@ func (db *DB) UpsertStudentRecord(ctx context.Context, r model.StudentRecord) er
                 end_at = excluded.end_at,
                 message = excluded.message;`
 
-	var endAtStr any = nil
+	var endAtStr any
 	if r.EndAt != nil {
-		endAtStr = FormatTime(*r.EndAt)
+		endAtStr = NullableTime(*r.EndAt)
 	}
 
 	q := db.Rebind(query)
-	_, err := db.ExecContext(ctx, q, r.SourceRecordID, r.StudentID, r.TypeName, FormatTime(r.StartAt), endAtStr, r.Message, FormatTime(r.CreatedAt))
+	createdAt := r.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+	_, err := db.ExecContext(ctx, q, r.SourceRecordID, r.StudentID, r.TypeName, NullableTime(r.StartAt), endAtStr, r.Message, createdAt.UTC())
 	return err
 }
 
@@ -112,26 +105,6 @@ func (db *DB) GetStatusPolicies(ctx context.Context) (map[string]model.StatusPol
 		policies[p.RecordType] = p
 	}
 	return policies, nil
-}
-
-// GetCurriculumTimeline loads all monthly milestones for an event
-func (db *DB) GetCurriculumTimeline(ctx context.Context, eventID int) (map[int]model.CurriculumMilestone, error) {
-	query := db.Rebind("SELECT event_id, month, min_level, expected_level, checkpoint_level, rank, COALESCE(notes, '') FROM curriculum_timeline WHERE event_id = ? ORDER BY month ASC;")
-	rows, err := db.QueryContext(ctx, query, eventID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	milestones := make(map[int]model.CurriculumMilestone)
-	for rows.Next() {
-		var m model.CurriculumMilestone
-		if err := rows.Scan(&m.EventID, &m.Month, &m.MinLevel, &m.ExpectedLevel, &m.CheckpointLevel, &m.Rank, &m.Notes); err != nil {
-			return nil, err
-		}
-		milestones[m.Month] = m
-	}
-	return milestones, nil
 }
 
 // SaveMetricSnapshot stores an immutable daily metric snapshot
@@ -193,14 +166,11 @@ func (db *DB) GetStudentRecords(ctx context.Context, studentID int64) ([]model.S
 	return records, rows.Err()
 }
 
-// ListStudentsWithPace returns all students with their latest metric snapshot
-func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilter string, search string) ([]model.StudentPaceView, error) {
-	// PostgreSQL stores end_at as timestamptz, which has no empty-string form and cannot be TRIM'd.
-	openRecord := "(r.end_at IS NULL OR TRIM(r.end_at) = '')"
-	if db.DriverName == "postgres" {
-		openRecord = "r.end_at IS NULL"
-	}
-	baseQuery := fmt.Sprintf(`
+// ListStudentsWithPace returns the students of a curriculum event (eventID 0:
+// any event) with their latest metric snapshot. CohortName is left for the
+// caller, which knows the configured cohort names.
+func (db *DB) ListStudentsWithPace(ctx context.Context, eventID, cohortID int, statusFilter string, search string) ([]model.StudentPaceView, error) {
+	baseQuery := `
         SELECT 
             s.id, s.source_user_id, s.login, COALESCE(s.first_name, ''), COALESCE(s.last_name, ''), COALESCE(s.email, ''),
             se.cohort_id, se.audit_ratio,
@@ -219,12 +189,12 @@ func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilt
             COALESCE(snap.calculated_at, se.last_synced_at),
             COALESCE((
                 SELECT r.type_name FROM student_source_records r
-                WHERE r.student_id = s.id AND %s
+                WHERE r.student_id = s.id AND r.end_at IS NULL
                 ORDER BY r.start_at DESC LIMIT 1
             ), 'active')
         FROM students s
         JOIN student_events se ON s.id = se.student_id
-        LEFT JOIN mentor_assignments m ON s.id = m.student_id AND m.is_primary = TRUE
+        LEFT JOIN mentor_assignments m ON s.id = m.student_id AND m.is_primary = TRUE AND m.ends_at IS NULL
         LEFT JOIN (
             SELECT sms.*
             FROM student_metric_snapshots sms
@@ -237,9 +207,13 @@ func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilt
                 AND sms.snapshot_date = latest.max_date
         ) snap ON s.id = snap.student_id AND snap.event_id = se.event_id
         WHERE 1=1
-    `, openRecord)
+    `
 
 	var args []any
+	if eventID > 0 {
+		baseQuery += " AND se.event_id = ?"
+		args = append(args, eventID)
+	}
 	if cohortID > 0 {
 		baseQuery += " AND se.cohort_id = ?"
 		args = append(args, cohortID)
@@ -251,8 +225,8 @@ func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilt
 	}
 
 	if search != "" {
-		baseQuery += " AND (s.login LIKE ? OR s.first_name LIKE ? OR s.last_name LIKE ? OR s.email LIKE ?)"
-		searchTerm := "%" + search + "%"
+		baseQuery += ` AND (s.login ILIKE ? ESCAPE '\' OR s.first_name ILIKE ? ESCAPE '\' OR s.last_name ILIKE ? ESCAPE '\' OR s.email ILIKE ? ESCAPE '\')`
+		searchTerm := "%" + escapeLike(search) + "%"
 		args = append(args, searchTerm, searchTerm, searchTerm, searchTerm)
 	}
 
@@ -309,12 +283,6 @@ func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilt
 			v.AuditRatio = 0.0
 		}
 
-		if v.CohortID == 4 {
-			v.CohortName = "01 Coding - Second Cohort"
-		} else if v.CohortID == 1 {
-			v.CohortName = "01 Coding - First Cohort"
-		}
-
 		if mentorID > 0 {
 			v.Mentor = &model.Mentor{ID: mentorID, Name: mentorName}
 		}
@@ -329,51 +297,116 @@ func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilt
 	return views, rows.Err()
 }
 
-// GetCohortHealthSummary computes North Star KPI and status counts for a cohort
-func (db *DB) GetCohortHealthSummary(ctx context.Context, cohortID int) (*model.CohortHealthSummary, error) {
-	students, err := db.ListStudentsWithPace(ctx, cohortID, "", "")
+// GetCohortHealthSummary computes the North Star KPI (GREEN / measurable)
+// and status counts for a cohort of a curriculum event, with the same
+// formula as OnTrackKPIs. When only is not nil the summary covers just
+// those students (a mentor's scope). CohortName is left for the caller.
+func (db *DB) GetCohortHealthSummary(ctx context.Context, eventID, cohortID int, only map[int64]bool) (*model.CohortHealthSummary, error) {
+	students, err := db.ListStudentsWithPace(ctx, eventID, cohortID, "", "")
 	if err != nil {
 		return nil, err
 	}
-
-	summary := &model.CohortHealthSummary{
-		CohortID:      cohortID,
-		TotalStudents: len(students),
-		StatusCounts:  make(map[string]int),
-		CalculatedAt:  time.Now(),
-	}
-
-	if cohortID == 4 {
-		summary.CohortName = "01 Coding - Second Cohort"
-	} else if cohortID == 1 {
-		summary.CohortName = "01 Coding - First Cohort"
-	}
-
-	for _, s := range students {
-		st := s.Pace.Status
-		summary.StatusCounts[st]++
-
-		if st == "PAUSED" || st == "INACTIVE" {
-			summary.PausedStudents++
-		} else {
-			summary.ActiveStudents++
-			switch st {
-			case "GREEN":
-				summary.OnTrackCount++
-			case "YELLOW":
-				summary.NearTrackCount++
-			case "RED":
-				summary.OffTrackCount++
+	if only != nil {
+		visible := students[:0]
+		for _, s := range students {
+			if only[s.ID] {
+				visible = append(visible, s)
 			}
 		}
+		students = visible
 	}
-
-	// North Star: OnTrackRate = (GREEN + YELLOW) / ActiveStudents (or GREEN / ActiveStudents)
-	// In PRD Section 4: On-Track = at or above configured minimum level (which includes Green & Yellow!)
-	if summary.ActiveStudents > 0 {
-		summary.OnTrackRate = float64(summary.OnTrackCount+summary.NearTrackCount) / float64(summary.ActiveStudents) * 100.0
-		summary.ExpectedLevelRate = float64(summary.OnTrackCount) / float64(summary.ActiveStudents) * 100.0
+	excluded, err := db.KPIExcludedSources(ctx)
+	if err != nil {
+		return nil, err
 	}
+	kpi := pace.OnTrack(kpiStudents(students), excluded)
+	kpi.Scope, kpi.EventID, kpi.CohortID = "cohort", eventID, cohortID
+	return &model.CohortHealthSummary{
+		CohortID:           cohortID,
+		TotalStudents:      kpi.Total,
+		MeasurableStudents: kpi.Measurable,
+		OnTrackCount:       kpi.MeasurableCounts["GREEN"],
+		NearTrackCount:     kpi.MeasurableCounts["YELLOW"],
+		OffTrackCount:      kpi.MeasurableCounts["RED"],
+		OnTrackRate:        kpi.Rate,
+		StatusCounts:       kpi.StatusCounts,
+		KPI:                kpi,
+		CalculatedAt:       time.Now(),
+	}, nil
+}
 
-	return summary, nil
+// KPIExcludedSources reads the source statuses (01Edu record types) that
+// status_policy flags exclude_from_active_kpis.
+func (db *DB) KPIExcludedSources(ctx context.Context) (map[string]bool, error) {
+	rows, err := db.QueryContext(ctx, `SELECT record_type FROM status_policy WHERE exclude_from_active_kpis`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	excluded := map[string]bool{}
+	for rows.Next() {
+		var recordType string
+		if err := rows.Scan(&recordType); err != nil {
+			return nil, err
+		}
+		excluded[recordType] = true
+	}
+	return excluded, rows.Err()
+}
+
+// OnTrackReport is the on-track KPI at every level a dashboard shows.
+type OnTrackReport struct {
+	Program model.OnTrackKPI
+	Cohorts map[int]model.OnTrackKPI
+	// Mentors is keyed by the mentor's person id and covers each mentor's
+	// current students only.
+	Mentors map[int64]model.OnTrackKPI
+}
+
+// OnTrackKPIs computes the KPI program-wide (every student of the event), per
+// cohort and per current mentor, all with pace.OnTrack.
+func (db *DB) OnTrackKPIs(ctx context.Context, eventID int) (OnTrackReport, error) {
+	report := OnTrackReport{Cohorts: map[int]model.OnTrackKPI{}, Mentors: map[int64]model.OnTrackKPI{}}
+	students, err := db.ListStudentsWithPace(ctx, eventID, 0, "", "")
+	if err != nil {
+		return report, err
+	}
+	excluded, err := db.KPIExcludedSources(ctx)
+	if err != nil {
+		return report, err
+	}
+	byCohort := map[int][]model.StudentPaceView{}
+	byMentor := map[int64][]model.StudentPaceView{}
+	for _, s := range students {
+		byCohort[s.CohortID] = append(byCohort[s.CohortID], s)
+		if s.Mentor != nil && s.Mentor.ID > 0 {
+			byMentor[s.Mentor.ID] = append(byMentor[s.Mentor.ID], s)
+		}
+	}
+	report.Program = pace.OnTrack(kpiStudents(students), excluded)
+	report.Program.Scope, report.Program.EventID = "program", eventID
+	for cohortID, rows := range byCohort {
+		kpi := pace.OnTrack(kpiStudents(rows), excluded)
+		kpi.Scope, kpi.EventID, kpi.CohortID = "cohort", eventID, cohortID
+		report.Cohorts[cohortID] = kpi
+	}
+	for mentorID, rows := range byMentor {
+		kpi := pace.OnTrack(kpiStudents(rows), excluded)
+		kpi.Scope, kpi.EventID, kpi.MentorID, kpi.Name = "mentor", eventID, mentorID, rows[0].Mentor.Name
+		report.Mentors[mentorID] = kpi
+	}
+	return report, nil
+}
+
+func kpiStudents(students []model.StudentPaceView) []pace.KPIStudent {
+	out := make([]pace.KPIStudent, len(students))
+	for i, s := range students {
+		out[i] = pace.KPIStudent{PaceStatus: s.Pace.Status, SourceStatus: s.SourceStatus}
+	}
+	return out
+}
+
+// escapeLike makes %, _ and \ in user search text match literally.
+func escapeLike(value string) string {
+	return strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(value)
 }

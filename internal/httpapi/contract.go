@@ -8,26 +8,6 @@ import (
 	"nextera-pulse/internal/store"
 )
 
-const (
-	pilotEventID   = 97
-	secondCohortID = 4
-	firstCohortID  = 1
-)
-
-// resolveMentorCohort maps the id the mentor UI puts in
-// /api/v1/cohorts/{id}/students. Event 97 is the pilot event and selects
-// the Second Cohort. Cohort ids 4 and 1 select those cohorts directly.
-func resolveMentorCohort(pathID int) (cohortID, eventID int, ok bool) {
-	switch pathID {
-	case pilotEventID, secondCohortID:
-		return secondCohortID, pilotEventID, true
-	case firstCohortID:
-		return firstCohortID, pilotEventID, true
-	default:
-		return 0, 0, false
-	}
-}
-
 type mentorStudentRow struct {
 	StudentID          int64    `json:"studentId"`
 	Login              string   `json:"login"`
@@ -50,20 +30,22 @@ type mentorStudentRow struct {
 }
 
 type mentorStudentsPayload struct {
-	CohortName   string             `json:"cohortName"`
-	EventID      int                `json:"eventId"`
-	SnapshotDate string             `json:"snapshotDate"`
-	Students     []mentorStudentRow `json:"students"`
+	CohortID   int    `json:"cohortId"`
+	CohortName string `json:"cohortName"`
+	EventID    int    `json:"eventId"`
+	// PaceRule is the monthly-target version behind the pace statuses.
+	PaceRule     *paceRule `json:"paceRule,omitempty"`
+	SnapshotDate string    `json:"snapshotDate"`
+	// DataSource is "live" when this server syncs 01Edu, otherwise "offline".
+	DataSource string             `json:"dataSource"`
+	SyncedAt   string             `json:"syncedAt,omitempty"`
+	Students   []mentorStudentRow `json:"students"`
 }
 
-func mentorStudentsResponse(eventID int, students []model.StudentPaceView, now time.Time) mentorStudentsPayload {
+func mentorStudentsResponse(eventID, cohortID int, cohortName string, students []model.StudentPaceView, now time.Time) mentorStudentsPayload {
 	rows := make([]mentorStudentRow, 0, len(students))
 	snapshot := now.UTC()
-	cohortName := "01 Coding - Second Cohort"
 	for _, student := range students {
-		if student.CohortName != "" {
-			cohortName = student.CohortName
-		}
 		if !student.LastCalculatedAt.IsZero() && student.LastCalculatedAt.After(snapshot) {
 			snapshot = student.LastCalculatedAt.UTC()
 		}
@@ -87,16 +69,18 @@ func mentorStudentsResponse(eventID int, students []model.StudentPaceView, now t
 			GapToMinimum:       student.Pace.GapToMinimum,
 			GapToExpected:      student.Pace.GapToExpected,
 			PaceStatus:         mentorPaceStatus(student.Pace.Status),
-			SourceStatus:       archiveSourceStatus(student.SourceStatus),
+			SourceStatus:       sourceStatusOrActive(student.SourceStatus),
 			HealthReasonCodes:  reasons,
 			MentorID:           mentorID(student),
 			MentorName:         mentorName(student),
 		})
 	}
 	return mentorStudentsPayload{
+		CohortID:     cohortID,
 		CohortName:   cohortName,
 		EventID:      eventID,
 		SnapshotDate: snapshot.Format("2006-01-02"),
+		DataSource:   "offline",
 		Students:     rows,
 	}
 }
@@ -166,10 +150,19 @@ func isLocalDevOrigin(origin string) bool {
 	}
 }
 
-func archiveSourceStatus(recordType string) string {
+func sourceStatusOrActive(recordType string) string {
 	status := strings.TrimSpace(recordType)
 	if status == "" {
 		return "active"
 	}
 	return status
+}
+
+// paceRule tells clients which monthly-target version the pace statuses use
+// and whether Product approved it.
+type paceRule struct {
+	EventID  int    `json:"eventId"`
+	Version  string `json:"version"`
+	Status   string `json:"status"`
+	Approved bool   `json:"approved"`
 }

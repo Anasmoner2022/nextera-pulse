@@ -23,6 +23,29 @@ type Client struct {
 	role        string
 	schemaIssue string
 	httpClient  *http.Client
+	tokens      TokenProvider
+}
+
+// TokenProvider supplies a renewable JWT (see TokenSource).
+type TokenProvider interface {
+	Token(ctx context.Context) (string, error)
+	Role() string
+	Invalidate()
+}
+
+// NewClientWithTokens builds a client whose JWT and Hasura role come from a
+// renewable token provider instead of a fixed token.
+func NewClientWithTokens(endpoint string, tokens TokenProvider, transport *http.Client) (*Client, error) {
+	if tokens == nil {
+		return nil, errors.New("missing 01Edu token provider")
+	}
+	c, err := NewClient(endpoint, "provider", transport)
+	if err != nil {
+		return nil, err
+	}
+	c.token = ""
+	c.tokens = tokens
+	return c, nil
 }
 
 // SchemaIssue is a short query-shape error with no personal data.
@@ -78,10 +101,20 @@ func (c *Client) Query(ctx context.Context, query string, vars any, target any) 
 	if err != nil {
 		return err
 	}
+	token, role := c.token, c.role
+	if c.tokens != nil {
+		token, err = c.tokens.Token(ctx)
+		if err != nil {
+			return err
+		}
+		if role == "" {
+			role = c.tokens.Role()
+		}
+	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	if c.role != "" {
-		req.Header.Set("x-hasura-role", c.role)
+	req.Header.Set("Authorization", "Bearer "+token)
+	if role != "" {
+		req.Header.Set("x-hasura-role", role)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -104,6 +137,10 @@ func (c *Client) Query(ctx context.Context, query string, vars any, target any) 
 	}
 	if len(envelope.Errors) > 0 {
 		c.schemaIssue = schemaIssue(envelope.Errors[0].Message)
+		if c.tokens != nil && strings.Contains(strings.ToLower(envelope.Errors[0].Message), "jwt") {
+			// Expired or rejected JWT: renew it on the next call.
+			c.tokens.Invalidate()
+		}
 		return fmt.Errorf("graphql returned %d error(s)", len(envelope.Errors))
 	}
 	if len(envelope.Data) == 0 || string(envelope.Data) == "null" {
@@ -121,7 +158,7 @@ func schemaIssue(message string) string {
 		return ""
 	}
 	lower := strings.ToLower(message)
-	if strings.Contains(lower, "field") || strings.Contains(lower, "type") || strings.Contains(lower, "role") || strings.Contains(lower, "expected") || strings.Contains(lower, "validation") {
+	if strings.Contains(lower, "jwt") || strings.Contains(lower, "field") || strings.Contains(lower, "type") || strings.Contains(lower, "role") || strings.Contains(lower, "expected") || strings.Contains(lower, "validation") {
 		return message
 	}
 	return ""
