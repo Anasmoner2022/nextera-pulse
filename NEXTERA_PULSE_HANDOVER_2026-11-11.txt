@@ -1,0 +1,165 @@
+================================================================================
+NEXTERA PULSE — BACKEND / DATA ENGINEERING HANDOVER
+Handover date: 2026-11-11 | Status: PARTIAL — NOT SPRINT 1 ACCEPTED
+For: Authorized 01Edu integration engineer / reviewer
+================================================================================
+
+1) WHAT THIS PACKAGE IS
+- Source snapshot from Nextera-Pulse-Full-Source-With-Changes.zip, with
+  portable store smoke test, opt-in integration smoke tests, and a logging fix.
+- No production .env, PostgreSQL DB, student archive, cookies, or tokens included.
+- Source folder is nextera-pulse/; run commands from inside this directory.
+- Original project work was attributed to Sohila. Subsequent code fixes and
+  incremental GraphQL code were prepared in prior ChatGPT work. This handover
+  distinguishes written code from user-observed successful tests.
+
+2) ARCHITECTURE / IMPLEMENTED CODE
+- Go 1.26.2; PostgreSQL 16 (SQLite for local tests); REST API; zip archive loader.
+- internal/pace/engine.go: calculates pause interval union, active days,
+  curriculum month, min/expected gaps and status; future pause records do not
+  immediately pause students; missing timeline handled as NOT_MEASURABLE.
+- internal/zeroone/client.go: GraphQL HTTP client with HTTPS guard, bearer auth,
+  timeout and pagination; EventUsers / AllEventUsers query event_user.
+- internal/sync/live.go: RefreshPilotLevels reads Event-wide event_user and
+  transactionally updates ONLY existing Event 97 / Cohort 4 memberships.
+  Rejects invalid/duplicate data and empty/unmatched pilot roster. Does not
+  assign new cohort membership; writes sync_runs success row.
+- cmd/worker/main.go: one-shot live level refresh (NOT scheduled; WRITES DB).
+- internal/sync/loader.go: archive ingestion and generateSnapshots.
+- internal/store/student_store.go: seed and retrieve source data / snapshots;
+  ListStudentsWithPace reads latest persisted snapshot; will return UNKNOWN,
+  0 days, month 1 defaults if no snapshot exists.
+- cmd/api/main.go, internal/httpapi/server.go: REST endpoints and health checks.
+
+3) EXACT NEW/RECONCILED CHANGES IN THIS DELIVERY (vs archived source)
+- internal/store/student_store_test.go: replaced test that referenced a missing
+  ../../pulse.db and hard-coded 52 actual students, with an isolated temporary
+  SQLite database + migrations and empty-query smoke assertion. This is not a
+  full fixture-based query test.
+- internal/sync/postgres_snapshot_integration_test.go: opt-in (//go:build
+  integration) PostgreSQL snapshot test, restricted by URL path to disposable
+  nextera_pulse_test, requires existing synthetic test_student enrollment.
+  Seeds policies/timeline, regenerates snapshots, verifies persisted record.
+  This reconciles the test previously run manually by the user on Windows;
+  the deliverable version has a build tag and refined safety guard.
+- internal/zeroone/live_read_test.go: opt-in (//go:build integration) read-only
+  GraphQL EventUsers(97, 5, 0) test using approved environment credentials.
+  If credentials absent it SKIPS (SKIP is NOT live validation).
+- cmd/seed/main.go: removed logging of full DATABASE_URL (which may contain a
+  password). The hardcoded local default password elsewhere is NOT suitable for
+  production and requires follow-up.
+- This handover document added.
+- Earlier code fixes included in the archived source: pace interval overlap,
+  future pause, missing timeline behavior, GraphQL HTTP client and pilot-level
+  refresh, and safer startup logging.
+
+4) VERIFIED BY USER ON WINDOWS (2026-11-11) — ACTUAL COMMAND OUTPUT
+- go mod download: fetched Go 1.26.2 toolchain using installed Go 1.25.4.
+- go test ./... -count=1: PASS packages internal/pace, internal/store,
+  internal/sync, internal/zeroone after replacing the store test locally.
+  Packages cmd/api, cmd/seed, cmd/worker, internal/httpapi, internal/model:
+  [no test files], NOT tested behaviors.
+- Docker Desktop Linux Engine running; postgres:16-alpine container started;
+  pg_isready returned 'accepting connections'.
+- nextera_pulse_test created separately; postgres.sql created 10 tables and
+  3 indexes; a synthetic test_student row and Event 97/Cohort 4 membership
+  inserted successfully.
+- go run ./cmd/api, DATABASE_URL pointed at nextera_pulse_test: API startup
+  succeeded. /health/ready returned READY; /api/v1/students and
+  /api/v1/cohorts/4/health returned JSON.
+- User-created postgres snapshot integration test passed with 'Generated 1
+  snapshots' and 'Snapshot successfully saved in PostgreSQL'. SQL verified
+  active_program_days=120, curriculum_month=5, actual_level=10, min=12,
+  expected=17, gaps -2/-7, status RED. API returned same 120 / month 5 / RED.
+- Note: this is ONE SYNTHETIC student and proves this pathway only.
+
+5) VERIFIED AGAINST ACTUAL 01EDU ENDPOINT (UNAUTHENTICATED REQUESTS)
+- Browser displayed secure WebSocket wss://01.nexteraeducation.net/
+  api/graphql-engine/v1/graphql (101 Switching Protocols).
+- HTTPS GET to same path returned HTTP 200.
+- HTTPS POST query { __typename } returned data.__typename='query_root'.
+- Unauthenticated query event_by_pk(id:97){id} returned validation-failed:
+  field event_by_pk not found in query_root.
+- Unauthenticated introspection returned exactly one field named
+  'no_queries_available'. Current anonymous role has no visible data queries.
+- NO successful authenticated 01Edu EventUsers read occurred. NO live GraphQL
+  to PostgreSQL data mutation occurred. The Go live read test was SKIPPED due
+  to ZEROONE_GRAPHQL_URL and ZEROONE_ACCESS_TOKEN not being configured then.
+- HTTP accessibility and GraphQL __typename are NOT proof of data permission.
+
+6) BLOCKERS / NOT DONE — CRITICAL
+P0:
+[ ] Obtain APPROVED server-side, read-only service credential from 01Edu owner.
+    Do not use browser session cookies or user tokens. Validate auth scheme:
+    code currently sends Authorization: Bearer <token>; provider must confirm.
+[ ] Verify live Hasura schema fields/types for event_user (especially userLogin,
+    createdAt, numeric level), endpoint and pagination with authorized access.
+[ ] Test EventUsers(97,5,0) read and AllEventUsers with real authorized role.
+[ ] Check cohort membership via authoritative label_user / approved mapping.
+[ ] Run RefreshPilotLevels only on disposable seeded DB, with authorized
+    roster, and verify idempotent re-run and rollback on simulated failure.
+[ ] Recalculate current pace/snapshots after successful sync; current worker
+    updates student_events.current_level ONLY. Dashboard may remain STALE.
+[ ] Manually compare representative real pilot students to 01Edu and resolve
+    any differences, with Product Owner sign-off.
+
+Other outstanding scope:
+[ ] Live Event 97 timeline sync (currently seeded static milestones).
+[ ] Live progress/transactions/audits/administrative records sync.
+[ ] Background scheduling/reconciliation and sync freshness monitoring.
+[ ] Harden snapshot semantics: SaveMetricSnapshot currently uses ON CONFLICT
+    DO UPDATE (not truly immutable); decide version/history policy.
+[ ] Fix ListStudentsWithPace fallback semantics: absent snapshot gives day 0,
+    month 1/UNKNOWN, which misrepresents student progress.
+[ ] Fix latest snapshot join to include event_id (current join groups by
+    student_id only; wrong event possible with multi-event data).
+[ ] Do not ignore GetStudentRecords errors in generateSnapshots; check rows.Err.
+[ ] Full fixtures for ListStudentsWithPace, separate integration tests,
+    security, auth/RBAC, pagination and error cases.
+[ ] Confirm Ziad's mentor UI and real Frontend/API integration.
+[ ] Production security: replace dev credentials, no public unauthenticated
+    student API, proper RBAC, restrict DB exposure, rotate any exposed secrets.
+
+7) HOW THE NEXT ENGINEER SHOULD TEST (POWERSHELL, FROM PROJECT DIRECTORY)
+A) Standard tests (run first):
+   go mod download
+   go test ./... -count=1
+B) Disposable database setup (do not DROP existing databases):
+   docker compose up -d postgres
+   docker exec pulse-postgres pg_isready -U postgres
+   # Use a fresh isolated nextera_pulse_test DB if needed; use existing schema
+   # migrations/postgres.sql, and a synthetic test_student with Event=97/Cohort=4.
+C) Snapshot integration (TEST DATABASE ONLY):
+   $env:PULSE_TEST_DATABASE_URL = 'postgres://postgres:<LOCAL_PASSWORD>@127.0.0.1:5432/nextera_pulse_test?sslmode=disable'
+   go test -tags=integration ./internal/sync -run '^TestPostgresSnapshotIntegration$' -v -count=1
+   # This test MUTATES rows in test DB; do not run against production.
+D) Live read (NO DATABASE WRITES; needs approved read-only service access):
+   $env:ZEROONE_GRAPHQL_URL = 'https://01.nexteraeducation.net/api/graphql-engine/v1/graphql'
+   # Set ZEROONE_ACCESS_TOKEN privately using a secure local workflow.
+   go test -tags=integration ./internal/zeroone -run '^TestLiveEventUsers$' -v -count=1
+   # SKIP is not PASS for integration coverage.
+E) Do not run 'go run ./cmd/worker' until source schema, read-only permission,
+   pilot roster, test DATABASE_URL and post-sync snapshots strategy are ready.
+   The worker changes persisted levels, even though GraphQL source is read-only.
+
+8) NOTES / CAUTIONS
+- Local development examples use postgres/postgres. DO NOT use on shared or
+  production environments. Review compose.yaml secrets before deployment.
+- The seed CLI previously printed full DB connection URI; this package removes
+  that print, but does not constitute a security audit.
+- No current network access or Go 1.26.2 toolchain available to independently
+  re-run the newly packaged build-tag tests in this packaging environment.
+  User-observed results in section 4 remain the actual validation evidence.
+- No production student data or secret credentials are included in this ZIP.
+
+9) ACCEPTANCE / SOHILA OWNERSHIP STATUS
+Sohila's backend implementation is PARTIALLY COMPLETE; NOT ready to close the
+full backend ownership or Sprint 1 acceptance. DB schema, archive path,
+calculation code, snapshot persistence, REST API and isolated tests exist, and
+local synthetic integration path has been demonstrated. Yet required official
+read-only GraphQL integration, full reliable source sync, snapshot freshness,
+real student comparison and product acceptance remain incomplete. Do not mark
+GraphQL Sync as DONE based on anonymous GraphQL __typename or skipped test.
+
+End of handover.
+================================================================================
