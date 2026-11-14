@@ -1,9 +1,0 @@
-# Normalize line endings to LF in the repository
-* text=auto eol=lf
-
-# Force binary files to never be modified
-*.png binary
-*.jpg binary
-*.ico binary
-*.woff2 binary
-*.woff binary

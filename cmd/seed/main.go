@@ -45,9 +45,9 @@ func main() {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = "postgres://postgres:postgres@127.0.0.1:5432/nextera_pulse?sslmode=disable"
-		log.Printf("Defaulting to PostgreSQL database: %s", dsn)
+		log.Println("Using local PostgreSQL default configuration")
 	} else {
-		log.Printf("Connecting to database: %s", dsn)
+		log.Println("Connecting to configured database")
 	}
 
 	// 2. Connect to Database
@@ -113,29 +113,6 @@ func main() {
 		log.Printf("  Near-Track (YELLOW): %d", summary.NearTrackCount)
 		log.Printf("  Off-Track (RED):  %d", summary.OffTrackCount)
 		log.Printf("  Status Breakdown: %v", summary.StatusCounts)
-	}
-
-	log.Println("Event 97 export has no curriculum timeline. Pace still uses the seeded month curve.")
-	checkRows, err := db.QueryContext(ctx, db.Rebind(`
-		SELECT s.login, se.current_level, snap.curriculum_month, snap.minimum_level, snap.expected_level, snap.pace_status
-		FROM students s
-		JOIN student_events se ON se.student_id = s.id AND se.cohort_id = 4 AND se.event_id = 97
-		JOIN student_metric_snapshots snap ON snap.id = (
-			SELECT id FROM student_metric_snapshots WHERE student_id = s.id ORDER BY snapshot_date DESC, id DESC LIMIT 1
-		)
-		ORDER BY s.login
-		LIMIT 5`))
-	if err == nil {
-		defer checkRows.Close()
-		log.Println("Five cohort-4 students checked against the seeded curve:")
-		for checkRows.Next() {
-			var login, status string
-			var level, minimum, expected float64
-			var month int
-			if scanErr := checkRows.Scan(&login, &level, &month, &minimum, &expected, &status); scanErr == nil {
-				log.Printf("  %s level %.0f month %d minimum %.0f expected %.0f %s", login, level, month, minimum, expected, status)
-			}
-		}
 	}
 
 	fmt.Println()

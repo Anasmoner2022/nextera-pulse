@@ -18,16 +18,9 @@ const maxResponseBytes = 16 << 20
 
 // Client performs authenticated read-only GraphQL calls.
 type Client struct {
-	endpoint    string
-	token       string
-	role        string
-	schemaIssue string
-	httpClient  *http.Client
-}
-
-// SchemaIssue is a short query-shape error with no personal data.
-func (c *Client) SchemaIssue() string {
-	return c.schemaIssue
+	endpoint   string
+	token      string
+	httpClient *http.Client
 }
 
 func NewClient(endpoint, token string, transport *http.Client) (*Client, error) {
@@ -45,11 +38,6 @@ func NewClient(endpoint, token string, transport *http.Client) (*Client, error) 
 		transport = &http.Client{Timeout: 20 * time.Second}
 	}
 	return &Client{endpoint: u.String(), token: token, httpClient: transport}, nil
-}
-
-// SetRole asks 01Edu to run the query with one of the roles in the session token.
-func (c *Client) SetRole(role string) {
-	c.role = strings.TrimSpace(role)
 }
 
 type graphQLRequest struct {
@@ -80,9 +68,6 @@ func (c *Client) Query(ctx context.Context, query string, vars any, target any) 
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.token)
-	if c.role != "" {
-		req.Header.Set("x-hasura-role", c.role)
-	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("graphql request: %w", err)
@@ -103,7 +88,6 @@ func (c *Client) Query(ctx context.Context, query string, vars any, target any) 
 		return fmt.Errorf("decode graphql response: %w", err)
 	}
 	if len(envelope.Errors) > 0 {
-		c.schemaIssue = schemaIssue(envelope.Errors[0].Message)
 		return fmt.Errorf("graphql returned %d error(s)", len(envelope.Errors))
 	}
 	if len(envelope.Data) == 0 || string(envelope.Data) == "null" {
@@ -113,18 +97,6 @@ func (c *Client) Query(ctx context.Context, query string, vars any, target any) 
 		return fmt.Errorf("decode graphql data: %w", err)
 	}
 	return nil
-}
-
-func schemaIssue(message string) string {
-	message = strings.TrimSpace(message)
-	if message == "" || len(message) > 160 || strings.Contains(message, "@") {
-		return ""
-	}
-	lower := strings.ToLower(message)
-	if strings.Contains(lower, "field") || strings.Contains(lower, "type") || strings.Contains(lower, "role") || strings.Contains(lower, "expected") || strings.Contains(lower, "validation") {
-		return message
-	}
-	return ""
 }
 
 type EventUser struct {

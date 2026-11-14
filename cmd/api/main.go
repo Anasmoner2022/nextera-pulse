@@ -1,24 +1,48 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 
-	"nextera-pulse/internal/app"
 	"nextera-pulse/internal/httpapi"
 	"nextera-pulse/internal/store"
 )
 
+func loadEnvFile(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			k := strings.TrimSpace(parts[0])
+			v := strings.TrimSpace(parts[1])
+			if os.Getenv(k) == "" {
+				os.Setenv(k, v)
+			}
+		}
+	}
+}
+
 func main() {
-	app.LoadEnvFile(".env")
+	loadEnvFile(".env")
 	log.Println("=== Starting Nextera Pulse API Server ===")
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://nextera_pulse:nextera_pulse@127.0.0.1:5432/nextera_pulse?sslmode=disable"
+		dsn = "postgres://postgres:postgres@127.0.0.1:5432/nextera_pulse?sslmode=disable"
 		log.Println("Using local PostgreSQL default configuration")
 	} else {
 		log.Println("Connecting to configured database")
@@ -36,33 +60,22 @@ func main() {
 		log.Fatalf("Database migration failed: %v", err)
 	}
 
-	addr := os.Getenv("HTTP_ADDR")
-	if addr == "" {
-		port := os.Getenv("PORT")
-		if port == "" {
-			port = "8080"
-		}
-		addr = port
-		if !strings.Contains(addr, ":") {
-			addr = ":" + addr
-		}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
+	addr := ":" + port
 
 	server := httpapi.NewServer(db)
 
-	if strings.HasPrefix(addr, ":") {
-		log.Printf("Nextera Pulse API listening on http://localhost%s", addr)
-	} else {
-		log.Printf("Nextera Pulse API listening on http://%s", addr)
-	}
-	log.Printf("Database ready (%s).", db.DriverName)
+	log.Printf("Nextera Pulse API listening on http://localhost%s", addr)
+	log.Println("Connected to PostgreSQL (nextera_pulse). Ready for Ziad's Frontend.")
 	log.Println("Available endpoints:")
 	log.Println("  - GET  /health/live")
 	log.Println("  - GET  /health/ready")
 	log.Println("  - GET  /api/v1/students?cohortId=4&status=RED")
 	log.Println("  - GET  /api/v1/students/:id")
 	log.Println("  - GET  /api/v1/cohorts")
-	log.Println("  - GET  /api/v1/cohorts/:id/students")
 	log.Println("  - GET  /api/v1/cohorts/:id/health")
 	log.Println("  - GET  /api/v1/interventions")
 	log.Println("  - POST /api/v1/interventions")

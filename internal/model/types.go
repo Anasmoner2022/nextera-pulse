@@ -28,10 +28,10 @@ type StudentEvent struct {
 
 // StatusPolicy defines clock pause & KPI exclusion rules for administrative statuses
 type StatusPolicy struct {
-	RecordType            string `json:"recordType"`
-	PauseClock            bool   `json:"pauseClock"`
-	ExcludeFromActiveKPIs bool   `json:"excludeFromActiveKpis"`
-	Description           string `json:"description"`
+	RecordType                string `json:"recordType"`
+	PauseClock                bool   `json:"pauseClock"`
+	ExcludeFromActiveKPIs     bool   `json:"excludeFromActiveKpis"`
+	Description               string `json:"description"`
 }
 
 // CurriculumMilestone represents expected levels by month for an event
@@ -101,23 +101,22 @@ type StudentPaceView struct {
 	CohortID         int         `json:"cohortId"`
 	CohortName       string      `json:"cohortName"`
 	Mentor           *Mentor     `json:"mentor,omitempty"`
-	SourceStatus     string      `json:"sourceStatus"`
 	Pace             PaceMetrics `json:"pace"`
 	LastCalculatedAt time.Time   `json:"lastCalculatedAt"`
 }
 
 // CohortHealthSummary gives aggregate KPI summary for a cohort
 type CohortHealthSummary struct {
-	CohortID          int            `json:"cohortId"`
-	CohortName        string         `json:"cohortName"`
-	TotalStudents     int            `json:"totalStudents"`
-	ActiveStudents    int            `json:"activeStudents"`
-	PausedStudents    int            `json:"pausedStudents"`
-	OnTrackCount      int            `json:"onTrackCount"`   // GREEN
-	NearTrackCount    int            `json:"nearTrackCount"` // YELLOW
-	OffTrackCount     int            `json:"offTrackCount"`  // RED
-	OnTrackRate       float64        `json:"onTrackRate"`    // North Star KPI
-	ExpectedLevelRate float64        `json:"expectedLevelRate"`
-	StatusCounts      map[string]int `json:"statusCounts"`
-	CalculatedAt      time.Time      `json:"calculatedAt"`
+	CohortID          int                `json:"cohortId"`
+	CohortName        string             `json:"cohortName"`
+	TotalStudents     int                `json:"totalStudents"`
+	ActiveStudents    int                `json:"activeStudents"`
+	PausedStudents    int                `json:"pausedStudents"`
+	OnTrackCount      int                `json:"onTrackCount"` // GREEN
+	NearTrackCount    int                `json:"nearTrackCount"` // YELLOW
+	OffTrackCount     int                `json:"offTrackCount"` // RED
+	OnTrackRate       float64            `json:"onTrackRate"` // North Star KPI
+	ExpectedLevelRate float64            `json:"expectedLevelRate"`
+	StatusCounts      map[string]int     `json:"statusCounts"`
+	CalculatedAt      time.Time          `json:"calculatedAt"`
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 )
 
 // Migrate runs schema migrations and seeds default policies & timeline
@@ -33,9 +32,6 @@ func (db *DB) Migrate(ctx context.Context, migrationPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to execute migration: %w", err)
 	}
-	if err := db.ensureStudentSourceRole(ctx); err != nil {
-		return err
-	}
 
 	// Seed status policies
 	if err := db.SeedStatusPolicy(ctx); err != nil {
@@ -48,20 +44,6 @@ func (db *DB) Migrate(ctx context.Context, migrationPath string) error {
 	}
 
 	return nil
-}
-
-// ensureStudentSourceRole adds the 01Edu role column on databases created
-// before that column existed. A repeated ALTER is expected and ignored.
-func (db *DB) ensureStudentSourceRole(ctx context.Context) error {
-	_, err := db.ExecContext(ctx, "ALTER TABLE students ADD COLUMN source_role TEXT NOT NULL DEFAULT ''")
-	if err == nil {
-		return nil
-	}
-	message := strings.ToLower(err.Error())
-	if strings.Contains(message, "duplicate column") || strings.Contains(message, "already exists") {
-		return nil
-	}
-	return fmt.Errorf("failed adding students.source_role: %w", err)
 }
 
 // SeedStatusPolicy inserts standard status policy if not present

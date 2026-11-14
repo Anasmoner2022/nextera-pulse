@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -179,32 +180,30 @@ func (db *DB) GetStudentRecords(ctx context.Context, studentID int64) ([]model.S
 	var records []model.StudentRecord
 	for rows.Next() {
 		var r model.StudentRecord
-		var startAt, endAt FlexibleTime
-		if err := rows.Scan(&r.ID, &r.SourceRecordID, &r.StudentID, &r.TypeName, &startAt, &endAt, &r.Message); err != nil {
+		var startStr string
+		var endStr sql.NullString
+		if err := rows.Scan(&r.ID, &r.SourceRecordID, &r.StudentID, &r.TypeName, &startStr, &endStr, &r.Message); err != nil {
 			return nil, err
 		}
-		r.StartAt = startAt.Time
-		if !endAt.Time.IsZero() {
-			t := endAt.Time
-			r.EndAt = &t
+		r.StartAt = ParseFlexibleTime(startStr)
+		if endStr.Valid && endStr.String != "" {
+			t := ParseFlexibleTime(endStr.String)
+			if !t.IsZero() {
+				r.EndAt = &t
+			}
 		}
 		records = append(records, r)
 	}
-	return records, rows.Err()
+	return records, nil
 }
 
 // ListStudentsWithPace returns all students with their latest metric snapshot
 func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilter string, search string) ([]model.StudentPaceView, error) {
-	// PostgreSQL stores end_at as timestamptz, which has no empty-string form and cannot be TRIM'd.
-	openRecord := "(r.end_at IS NULL OR TRIM(r.end_at) = '')"
-	if db.DriverName == "postgres" {
-		openRecord = "r.end_at IS NULL"
-	}
-	baseQuery := fmt.Sprintf(`
+	baseQuery := `
         SELECT 
             s.id, s.source_user_id, s.login, COALESCE(s.first_name, ''), COALESCE(s.last_name, ''), COALESCE(s.email, ''),
             se.cohort_id, se.audit_ratio,
-            COALESCE(m.mentor_id, 0), COALESCE(m.mentor_name, ''),
+            COALESCE(m.id, 0), COALESCE(m.mentor_name, ''),
             COALESCE(snap.enrolled_at, se.enrolled_at),
             COALESCE(snap.active_program_days, 0),
             COALESCE(snap.curriculum_month, 1),
@@ -216,12 +215,7 @@ func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilt
             COALESCE(snap.gap_to_expected, 0),
             COALESCE(snap.pace_status, 'UNKNOWN'),
             COALESCE(snap.health_reasons, '[]'),
-            COALESCE(snap.calculated_at, se.last_synced_at),
-            COALESCE((
-                SELECT r.type_name FROM student_source_records r
-                WHERE r.student_id = s.id AND %s
-                ORDER BY r.start_at DESC LIMIT 1
-            ), 'active')
+            COALESCE(snap.calculated_at, se.last_synced_at)
         FROM students s
         JOIN student_events se ON s.id = se.student_id
         LEFT JOIN mentor_assignments m ON s.id = m.student_id AND m.is_primary = TRUE
@@ -229,15 +223,13 @@ func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilt
             SELECT sms.*
             FROM student_metric_snapshots sms
             INNER JOIN (
-                SELECT student_id, event_id, MAX(snapshot_date) as max_date
+                SELECT student_id, MAX(snapshot_date) as max_date
                 FROM student_metric_snapshots
-                GROUP BY student_id, event_id
-            ) latest ON sms.student_id = latest.student_id
-                AND sms.event_id = latest.event_id
-                AND sms.snapshot_date = latest.max_date
-        ) snap ON s.id = snap.student_id AND snap.event_id = se.event_id
+                GROUP BY student_id
+            ) latest ON sms.student_id = latest.student_id AND sms.snapshot_date = latest.max_date
+        ) snap ON s.id = snap.student_id
         WHERE 1=1
-    `, openRecord)
+    `
 
 	var args []any
 	if cohortID > 0 {
@@ -280,14 +272,13 @@ func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilt
 		var v model.StudentPaceView
 		var mentorID int64
 		var mentorName string
-		var enrolledAt, calculatedAt FlexibleTime
-		var reasonsJSON string
+		var enrolledStr, calculatedStr, reasonsJSON string
 
 		err := rows.Scan(
 			&v.ID, &v.SourceUserID, &v.Login, &v.FirstName, &v.LastName, &v.Email,
 			&v.CohortID, &v.AuditRatio,
 			&mentorID, &mentorName,
-			&enrolledAt,
+			&enrolledStr,
 			&v.Pace.ActiveProgramDays,
 			&v.Pace.CurriculumMonth,
 			&v.Pace.ActualLevel,
@@ -298,8 +289,7 @@ func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilt
 			&v.Pace.GapToExpected,
 			&v.Pace.Status,
 			&reasonsJSON,
-			&calculatedAt,
-			&v.SourceStatus,
+			&calculatedStr,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed scanning student pace row: %w", err)
@@ -319,14 +309,14 @@ func (db *DB) ListStudentsWithPace(ctx context.Context, cohortID int, statusFilt
 			v.Mentor = &model.Mentor{ID: mentorID, Name: mentorName}
 		}
 
-		v.Pace.EnrolledAt = enrolledAt.Time
-		v.LastCalculatedAt = calculatedAt.Time
+		v.Pace.EnrolledAt = ParseFlexibleTime(enrolledStr)
+		v.LastCalculatedAt = ParseFlexibleTime(calculatedStr)
 		_ = json.Unmarshal([]byte(reasonsJSON), &v.Pace.Reasons)
 
 		views = append(views, v)
 	}
 
-	return views, rows.Err()
+	return views, nil
 }
 
 // GetCohortHealthSummary computes North Star KPI and status counts for a cohort

@@ -1,34 +1,23 @@
-# Environment
-.env
-.env.*
-!.env.example
-*.sqlite
-*.sqlite-wal
-*.sqlite-shm
-NextEra-All-Cohorts-*.zip
-
-# Go
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 bin/
-coverage.out
-*.test
 /api
-/api.exe
-/worker
-/worker.exe
+/seed
 
-# Node
-node_modules/
-web/dist/
-web/.vite/
+# Local databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
-# IDE / OS
-.vscode/
-.idea/
+# Environment & local secrets
+.env
+.env.local
+
+# OS files
 .DS_Store
 Thumbs.db
-
-# Logs
-*.log
-
-# Local DB / Docker
-postgres-data/
