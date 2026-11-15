@@ -6,8 +6,8 @@ export type PaceStatus =
   | 'INACTIVE'
   | 'NOT_MEASURABLE';
 
-import { computeOnTrack, describeOnTrack } from './studentMetrics.mjs';
-export { computeOnTrack, describeOnTrack };
+import { computeOnTrack, describeOnTrack, isInActiveKpiPopulation } from './studentMetrics.mjs';
+export { computeOnTrack, describeOnTrack, isInActiveKpiPopulation };
 import type { ActiveKpiSourceStatus } from './studentMetrics.mjs';
 export type { OnTrackKpi, OnTrackState, StatusPolicy } from './studentMetrics.mjs';
 

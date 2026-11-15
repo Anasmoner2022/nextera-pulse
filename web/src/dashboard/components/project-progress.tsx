@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { StudentPaceRow } from "../../domain";
+import { getCohortProgress, getStudentProgress, usesLiveApi } from "../../data/students";
+import type { ProgressBoard } from "../../data/students";
+import { useSyncStatus } from "../../data/syncStatus";
 import type { PulseAccount } from "../../identity";
 import { findAssignedMentor } from "../../studentAccountLink.js";
 import type { Language } from "../config";
@@ -82,6 +85,18 @@ export function ProjectProgress({
   view: "cohort" | "student";
   onSelectStudent?: (student: StudentPaceRow) => void;
 }) {
+  if (usesLiveApi()) {
+    return (
+      <LiveProjectProgress
+        rows={rows}
+        accounts={accounts}
+        mentors={mentors}
+        lang={lang}
+        view={view}
+        onSelectStudent={onSelectStudent}
+      />
+    );
+  }
   const ar = lang === "ar";
   const isCohort = view === "cohort";
   const [selection, setSelection] = useState<
@@ -623,6 +638,201 @@ export function ProjectProgress({
                         ? "لم يكتمل"
                         : "To do"}
                   </span>
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+// Load project completion from the backend in live mode; keep demo rendering as a fallback.
+function LiveProjectProgress({
+  rows,
+  lang,
+  view,
+  onSelectStudent,
+}: {
+  rows: StudentPaceRow[];
+  accounts: PulseAccount[];
+  mentors: PulseAccount[];
+  lang: Language;
+  view: "cohort" | "student";
+  onSelectStudent?: (student: StudentPaceRow) => void;
+}) {
+  const ar = lang === "ar";
+  const studentId = view === "student" ? rows[0]?.studentId : undefined;
+  const [board, setBoard] = useState<ProgressBoard | null>(null);
+  const [failed, setFailed] = useState(false);
+  const syncKey = useSyncStatus().status?.lastSuccessAt ?? "";
+
+  useEffect(() => {
+    let active = true;
+    setFailed(false);
+    const request = studentId
+      ? getStudentProgress(studentId)
+      : getCohortProgress();
+    request
+      .then((next) => {
+        if (active) setBoard(next);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [studentId, syncKey]);
+
+  useEffect(() => setBoard(null), [studentId]);
+
+  const students = board?.students ?? [];
+  const projects = board?.projects ?? [];
+  const doneCells = students.reduce((sum, student) => sum + student.completed, 0);
+  const totalCells = students.reduce((sum, student) => sum + student.total, 0);
+  const completionRate = totalCells
+    ? Math.round((doneCells / totalCells) * 100)
+    : 0;
+  const visible =
+    view === "student"
+      ? students.filter((student) => student.studentId === studentId)
+      : students;
+
+  return (
+    <section
+      className={`table-panel project-progress ${view === "cohort" ? "project-progress-cohort" : "project-progress-student"}`}
+    >
+      <header className="project-progress-heading">
+        <div>
+          <span className="eyebrow">{ar ? "تقدم المشاريع" : "PROJECT PROGRESS"}</span>
+          <h2>
+            {view === "cohort"
+              ? ar
+                ? "إنجاز مشاريع الكوهورت"
+                : "Cohort project progress"
+              : ar
+                ? "مشاريعك"
+                : "Your projects"}
+          </h2>
+          <p>
+            {board?.syncedAt
+              ? ar
+                ? "المربع يُملأ من سجل 01Edu المباشر."
+                : "A square is filled from the live 01Edu record."
+              : ar
+                ? "المربع يُملأ من آخر مزامنة مع 01Edu."
+                : "Squares reflect the most recent 01Edu sync."}
+          </p>
+        </div>
+        <span className="project-demo-tag">
+          <i />
+          {board?.syncedAt ? (ar ? "01Edu مباشر" : "Live 01Edu") : "01Edu"}
+        </span>
+      </header>
+      {failed && (
+        <p className="project-empty">
+          {ar ? "تعذر تحميل تقدم المشاريع." : "Project progress could not be loaded."}
+        </p>
+      )}
+      {!failed && !board && (
+        <p className="project-empty">
+          {ar ? "جارٍ التحميل من 01Edu…" : "Loading project records from 01Edu…"}
+        </p>
+      )}
+      {board && projects.length === 0 && (
+        <p className="project-empty">
+          {ar
+            ? "لا توجد مشاريع من النوع project من 01Edu لهذا الكوهورت بعد."
+            : "No 01Edu project records have been synced for this cohort yet."}
+        </p>
+      )}
+      {board && projects.length > 0 && (
+        <>
+          <div className="project-overall-progress">
+            <div>
+              <b>{completionRate}%</b>
+              <span>
+                {ar
+                  ? `${doneCells} من ${totalCells} خلية منتهية`
+                  : `${doneCells} of ${totalCells} project cells are done`}
+              </span>
+            </div>
+            <div className="project-overall-track">
+              <i style={{ width: `${completionRate}%` }} />
+            </div>
+          </div>
+          <details className="project-key">
+            <summary>
+              {ar ? `أسماء المشاريع (${projects.length})` : `Project names (${projects.length})`}
+            </summary>
+            <div>
+              {projects.map((project, index) => (
+                <span key={project.id}>
+                  <b>{`P${index + 1}`}</b>
+                  {project.name}
+                </span>
+              ))}
+            </div>
+          </details>
+          <div
+            className="project-student-board"
+            aria-label={ar ? "إنجاز المشاريع حسب الطالب" : "Project completion by student"}
+          >
+            {visible.map((student) => {
+              const pace = rows.find((row) => row.studentId === student.studentId);
+              const percent = student.total
+                ? Math.round((student.completed / student.total) * 100)
+                : 0;
+              return (
+                <article className="project-student-card" key={student.studentId}>
+                  <header>
+                    <span className="project-student-avatar">
+                      {(student.displayName || student.login)
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </span>
+                    <span className="project-card-identity">
+                      <b>{student.displayName || student.login}</b>
+                      <small>{student.mentorName || (ar ? "لم يُسنَد" : "Unassigned")}</small>
+                    </span>
+                    <span className="project-card-count">
+                      <b>
+                        {student.completed}<small>/{student.total}</small>
+                      </b>
+                      <span>{ar ? "مشاريع مكتملة" : "projects done"}</span>
+                    </span>
+                  </header>
+                  <div className="project-student-meter">
+                    <i style={{ width: `${percent}%` }} />
+                  </div>
+                  <div className="project-card-steps">
+                    {projects.map((project, index) => {
+                      const complete = student.done[index];
+                      return (
+                        <div
+                          className="project-step"
+                          key={project.id}
+                          title={`${project.name}: ${complete ? (ar ? "مكتمل" : "Done") : (ar ? "غير مكتمل" : "Not done")}`}
+                        >
+                          <span className={`project-square ${complete ? "complete" : ""}`}>
+                            {complete ? "✓" : ""}
+                          </span>
+                          <small>{`P${index + 1}`}</small>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {view === "cohort" && pace && onSelectStudent && (
+                    <button
+                      type="button"
+                      className="setting-action"
+                      onClick={() => onSelectStudent(pace)}
+                    >
+                      {ar ? "فتح السجل" : "Open record"}
+                    </button>
+                  )}
                 </article>
               );
             })}

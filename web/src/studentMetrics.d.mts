@@ -34,5 +34,6 @@ export type OnTrackKpi = {
 export type OnTrackState = { status: 'loading' | 'error' | 'ready'; error?: string };
 
 export const measurablePaceStatuses: readonly string[];
+export function isInActiveKpiPopulation(student: { sourceStatus: string }): boolean;
 export function computeOnTrack(students: { paceStatus: string; sourceStatus: string }[], statusPolicy: StatusPolicy[]): OnTrackKpi;
 export function describeOnTrack(state: OnTrackState, kpi: OnTrackKpi | null | undefined): { value: string; foot: string; tone: 'loading' | 'error' | 'empty' | 'ready' };

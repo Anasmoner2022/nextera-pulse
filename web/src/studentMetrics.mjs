@@ -11,6 +11,12 @@
 
 export const measurablePaceStatuses = ['GREEN', 'YELLOW', 'RED']
 
+const excludedFromActiveKpis = new Set(['restricted', 'blocked-long', 'ban', 'left-school'])
+
+export function isInActiveKpiPopulation(student) {
+  return !excludedFromActiveKpis.has(student.sourceStatus)
+}
+
 export function computeOnTrack(students, statusPolicy) {
   const excluded = new Set(statusPolicy.filter(policy => policy.excludeFromActiveKpis).map(policy => policy.recordType))
   const kpi = { onTrack: 0, measurable: 0, rate: null, hasMeasurable: false, total: students.length, excludedByPolicy: 0, statusCounts: {}, measurableCounts: { GREEN: 0, YELLOW: 0, RED: 0 } }

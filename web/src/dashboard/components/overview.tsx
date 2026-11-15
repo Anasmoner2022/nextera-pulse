@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { isInActiveKpiPopulation } from "../../domain";
+import { describeOnTrack, isInActiveKpiPopulation } from "../../domain";
 import type { PaceStatus, StudentPaceRow } from "../../domain";
 import { ProfileAvatar } from "../../identity";
 import type { PulseAccount } from "../../identity";
@@ -8,6 +8,7 @@ import { ProjectProgress } from "./project-progress";
 import { CohortLevelHistogram } from "./CohortLevelHistogram";
 import { normalizeLogin, statusNames, text } from "../config";
 import type { Intervention, Language } from "../config";
+import type { OnTrackKpis } from "../onTrack";
 
 // Keep a single presentation primitive for the high-level workspace metrics.
 export function Stat({
@@ -19,7 +20,7 @@ export function Stat({
 }: {
   icon: string;
   label: string;
-  value: number;
+  value: number | string;
   foot: string;
   color: string;
 }) {
@@ -40,6 +41,7 @@ export function ManagerOverview({
   rows,
   interventions,
   lang,
+  kpis,
   onOpenTeam,
   onOpenMentor,
 }: {
@@ -47,6 +49,7 @@ export function ManagerOverview({
   rows: StudentPaceRow[];
   interventions: Intervention[];
   lang: Language;
+  kpis: OnTrackKpis;
   onOpenTeam?: () => void;
   onOpenMentor?: (mentor: PulseAccount) => void;
 }) {
@@ -59,7 +62,15 @@ export function ManagerOverview({
   const unassigned = rows.filter(
     (row) => !assigned.has(normalizeLogin(row.login)),
   );
+  const programRate = describeOnTrack(kpis, kpis.program);
   const metrics = [
+    {
+      icon: "◎",
+      label: ar ? "على المسار" : "On-track rate",
+      value: programRate.value,
+      note: programRate.foot,
+      tone: programRate.tone === "error" ? "amber" : "green",
+    },
     {
       icon: "✦",
       label: ar ? "المنتورز" : "Mentors",
@@ -171,19 +182,16 @@ export function ManagerOverview({
           const assignedRows = rows.filter((row) =>
             loginSet.has(normalizeLogin(row.login)),
           );
-          const activeAssigned = assignedRows.filter(isInActiveKpiPopulation);
-          const onTrack = activeAssigned.filter(
-            (row) => row.paceStatus === "GREEN",
-          ).length;
-          const attention = activeAssigned.filter(
-            (row) => row.paceStatus === "YELLOW" || row.paceStatus === "RED",
-          ).length;
+          const mentorKpi = kpis.mentors[mentor.id];
+          const mentorRate = describeOnTrack(kpis, mentorKpi);
+          const onTrack = mentorKpi?.measurableCounts.GREEN ?? 0;
+          const attention =
+            (mentorKpi?.measurableCounts.YELLOW ?? 0) +
+            (mentorKpi?.measurableCounts.RED ?? 0);
           const followUps = interventions.filter((item) =>
             assignedRows.some((row) => row.studentId === item.studentId),
           ).length;
-          const onTrackRate = activeAssigned.length
-            ? Math.round((onTrack / activeAssigned.length) * 100)
-            : 0;
+          const onTrackRate = mentorKpi?.rate ?? 0;
           return (
             <article className="manager-mentor-card" key={mentor.id}>
               <div className="manager-mentor-head">
@@ -193,7 +201,7 @@ export function ManagerOverview({
                   <small>{mentor.email}</small>
                 </div>
                 <span className="manager-track-rate">
-                  {onTrackRate}%<small>{ar ? "على المسار" : "on track"}</small>
+                  {mentorRate.value}<small>{ar ? "على المسار" : "on track"}</small>
                 </span>
               </div>
               <div className="manager-cohort-rate">
@@ -204,7 +212,9 @@ export function ManagerOverview({
                       : "Active students on track"}
                   </span>
                   <b>
-                    {onTrack} / {activeAssigned.length}
+                    {kpis.status === "ready"
+                      ? `${onTrack} / ${mentorKpi?.measurable ?? 0}`
+                      : "—"}
                   </b>
                 </div>
                 <div

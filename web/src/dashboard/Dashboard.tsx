@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { getStudents } from "../data/students";
+import {
+  assignMentor,
+  createFollowUp,
+  deleteFollowUp,
+  getFollowUps,
+  getStaff,
+  getStudents,
+  unassignMentor,
+} from "../data/students";
+import type { StaffMember } from "../data/students";
+import { useSyncStatus } from "../data/syncStatus";
 import { isInActiveKpiPopulation } from "../domain";
 import type { PaceStatus, StudentPaceRow, StudentsResponse } from "../domain";
 import {
@@ -11,6 +21,7 @@ import {
   writeAccounts,
 } from "../identity";
 import type { AccessKey, PulseAccount, PulseSession } from "../identity";
+import { defaultPermissions } from "../identity/defaults";
 import { persistProfileAccount } from "../accountPersistence.js";
 import {
   assignStudentToMentor,
@@ -50,6 +61,7 @@ import {
   text,
 } from "./config";
 import type { Intervention, Language, Section } from "./config";
+import { useOnTrackKpis } from "./onTrack";
 import "./hierarchy.css";
 import "./student-profile-insights.css";
 
@@ -72,7 +84,8 @@ export function Dashboard({
   const [sidebarHidden, setSidebarHidden] = useState(
     () => localStorage.getItem("pulse-sidebar-hidden") === "true",
   );
-  const apiReadOnly = import.meta.env.VITE_STUDENTS_SOURCE === "api";
+  const usingLiveApi = (import.meta.env.VITE_STUDENTS_SOURCE ?? "api") === "api";
+  const apiReadOnly = usingLiveApi;
   const [today, setToday] = useState(() => new Date());
   const [section, setSection] = useState<Section>("overview");
   const [memberProfileReturnSection, setMemberProfileReturnSection] =
@@ -86,6 +99,10 @@ export function Dashboard({
     null,
   );
   const [data, setData] = useState<StudentsResponse | null>(null);
+  const [staff, setStaff] = useState<{
+    managers: StaffMember[];
+    mentors: StaffMember[];
+  } | null>(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
@@ -152,6 +169,7 @@ export function Dashboard({
   );
   const [studentFormOpen, setStudentFormOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
+  const { status: syncStatus } = useSyncStatus();
   const t = text[lang],
     rtl = lang === "ar";
   const session = actingAsMentor ?? signedInSession;
@@ -197,8 +215,9 @@ export function Dashboard({
     document.documentElement.dataset.theme = theme;
   }, [theme]);
   useEffect(() => {
-    localStorage.setItem("pulse-interventions", JSON.stringify(interventions));
-  }, [interventions]);
+    if (!usingLiveApi)
+      localStorage.setItem("pulse-interventions", JSON.stringify(interventions));
+  }, [interventions, usingLiveApi]);
   useEffect(() => {
     localStorage.setItem(
       "pulse-managed-students",
@@ -225,10 +244,40 @@ export function Dashboard({
       .catch((e) => {
         if (live) setError(e instanceof Error ? e.message : "Unknown error");
       });
+    if (usingLiveApi) {
+      getFollowUps()
+        .then((followUps) => {
+          if (live) setInterventions(followUps);
+        })
+        .catch((e) => {
+          if (live) setError(e instanceof Error ? e.message : "Unknown error");
+        });
+      getStaff()
+        .then((next) => {
+          if (live) setStaff(next);
+        })
+        .catch(() => {
+          if (live) setStaff(null);
+        });
+    }
     return () => {
       live = false;
     };
-  }, [retry]);
+  }, [retry, usingLiveApi]);
+  useEffect(() => {
+    const lastSuccess = syncStatus?.lastSuccessAt;
+    if (!usingLiveApi || !lastSuccess || !data || data.syncedAt === lastSuccess)
+      return;
+    let active = true;
+    getStudents()
+      .then((next) => {
+        if (active) setData(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [data, syncStatus?.lastSuccessAt, usingLiveApi]);
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -268,6 +317,7 @@ export function Dashboard({
   // API-owned pace metrics authoritative.
   const rows = useMemo(() => {
     const base = data?.students ?? [];
+    if (usingLiveApi) return base;
     const saved = new Map(
       managedStudents.map((student) => [student.studentId, student]),
     );
@@ -307,7 +357,7 @@ export function Dashboard({
     return [...baseRows, ...extraRows].filter(
       (student) => !deletedStudentIds.includes(student.studentId),
     );
-  }, [data, managedStudents, deletedStudentIds, accounts]);
+  }, [data, managedStudents, deletedStudentIds, accounts, usingLiveApi]);
   // Derive role-aware cohort, roster, account, and intervention scopes once.
   const isManager = session.role === "manager";
   const savedDemoMentor = accounts.find(
@@ -331,7 +381,7 @@ export function Dashboard({
       rows.map((student) => student.login),
     capacityLimit: savedDemoMentor?.capacityLimit ?? Math.max(20, rows.length),
   };
-  const mentorAccounts = [
+  const localMentorAccounts = [
     demoMentor,
     ...accounts.filter(
       (account) => account.role === "mentor" && account.id !== "demo-mentor",
@@ -355,7 +405,28 @@ export function Dashboard({
       ]),
     ],
   }));
+  const toStaffAccount = (member: StaffMember): PulseAccount => {
+    const assignedStudentLogins = rows
+      .filter((student) => student.mentorId === member.studentId)
+      .map((student) => student.login);
+    return {
+      id: `01edu-${member.pulseRole}-${member.studentId}`,
+      name: member.displayName || member.login,
+      email: member.email,
+      role: member.pulseRole,
+      permissions: defaultPermissions[member.pulseRole],
+      studentLogin: member.login,
+      assignedStudentLogins,
+      capacityLimit: Math.max(20, assignedStudentLogins.length),
+    };
+  };
+  const liveManagers = (staff?.managers ?? []).map(toStaffAccount);
+  const liveMentors = (staff?.mentors ?? []).map(toStaffAccount);
+  const useLiveStaff =
+    usingLiveApi && (liveManagers.length > 0 || liveMentors.length > 0);
+  const mentorAccounts = useLiveStaff ? liveMentors : localMentorAccounts;
   const programManagerAccount: PulseAccount =
+    (useLiveStaff ? liveManagers[0] : undefined) ??
     accounts.find((account) => account.role === "manager") ??
     (session.role === "manager"
       ? session
@@ -369,7 +440,10 @@ export function Dashboard({
   const myAssignedLogins = new Set(
     session.role === "mentor"
       ? [
-          ...(session.assignedStudentLogins ??
+          ...(useLiveStaff
+            ? (mentorAccounts.find((mentor) => mentor.id === session.id)
+                ?.assignedStudentLogins ?? [])
+            : session.assignedStudentLogins ??
             (session.id === "demo-mentor"
               ? rows.map((student) => student.login)
               : [])),
@@ -391,14 +465,35 @@ export function Dashboard({
       : "";
   // Keep roster access separate from read-only cohort analytics. Mentor roster
   // access stays limited to assigned students even when broader views are open.
+  const staffLogins = new Set(
+    [...(staff?.mentors ?? []), ...(staff?.managers ?? [])].map((member) =>
+      normalizeLogin(member.login),
+    ),
+  );
+  const learnerRows = useLiveStaff
+    ? rows.filter((student) => !staffLogins.has(normalizeLogin(student.login)))
+    : rows;
+  const onTrackKpis = useOnTrackKpis({
+    live: usingLiveApi,
+    rows: learnerRows,
+    mentors: mentorAccounts,
+    refreshKey: `${retry}|${data?.syncedAt ?? ""}|${learnerRows
+      .map((row) => `${row.studentId}:${row.mentorId ?? 0}`)
+      .join(",")}`,
+  });
+  const staffSeesAll = usingLiveApi && session.role !== "student";
   const visibleRows = visibleStudentsForRole(
     session.role,
-    rows,
-    session.role === "mentor" ? [...myAssignedLogins] : [],
+    learnerRows,
+    session.role === "mentor"
+      ? staffSeesAll
+        ? learnerRows.map((student) => student.login)
+        : [...myAssignedLogins]
+      : [],
     studentLogin,
   );
-  const visibleInterventionRows = isManager
-    ? rows
+  const visibleInterventionRows = isManager || staffSeesAll
+    ? learnerRows
     : session.role === "mentor"
       ? assignedRows
       : [];
@@ -410,6 +505,32 @@ export function Dashboard({
       (student) => student.studentId === item.studentId,
     ),
   );
+  const canDeleteFollowUp = (item: Intervention) =>
+    usingLiveApi
+      ? item.canDelete === true
+      : isManager || item.authorId === session.id;
+  const removeFollowUp = async (item: Intervention) => {
+    if (usingLiveApi) {
+      try {
+        await deleteFollowUp(item.id);
+        setInterventions((current) =>
+          current.filter((entry) => entry.id !== item.id),
+        );
+        setMessage(t.removed);
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Could not delete the follow-up.",
+        );
+      }
+      return;
+    }
+    setInterventions((current) =>
+      current.filter((entry) => entry.id !== item.id),
+    );
+    setMessage(t.removed);
+  };
   const accountRows = isManager
     ? [
         ...mentorAccounts,
@@ -429,7 +550,7 @@ export function Dashboard({
       .filter((account) => account.role === "student" && account.studentLogin)
       .map((account) => normalizeLogin(account.studentLogin!)),
   );
-  const accountScopeRows = isManager ? rows : assignedRows;
+  const accountScopeRows = isManager ? learnerRows : assignedRows;
   const unlinkedStudentRecords = accountScopeRows.filter(
     (student) => !linkedStudentLogins.has(normalizeLogin(student.login)),
   );
@@ -610,8 +731,27 @@ export function Dashboard({
     setMessage(
       "No change was made: the configured backend currently supports read-only student data.",
     );
-  const saveIntervention = (event: FormEvent<HTMLFormElement>) => {
+  const saveIntervention = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (usingLiveApi) {
+      if (!interventionStudent || !interventionNote.trim()) return;
+      try {
+        const saved = await createFollowUp({
+          studentId: Number(interventionStudent),
+          note: interventionNote.trim(),
+        });
+        setInterventions((current) => [saved, ...current]);
+        setInterventionNote("");
+        setInterventionStudent("");
+        setShowInterventionForm(false);
+        setMessage(rtl ? "تم حفظ المتابعة في الـAPI." : "Follow-up saved to the API.");
+      } catch (error) {
+        setMessage(
+          error instanceof Error ? error.message : "Could not save follow-up.",
+        );
+      }
+      return;
+    }
     if (apiReadOnly) {
       explainReadOnlyApi();
       return;
@@ -933,11 +1073,32 @@ export function Dashboard({
       mentor,
     ]);
   };
-  const assignStudent = (
+  const assignStudent = async (
     mentorId: string,
     login: string,
     assigned: boolean,
   ) => {
+    if (usingLiveApi) {
+      const student = rows.find(
+        (row) => normalizeLogin(row.login) === normalizeLogin(login),
+      );
+      const liveMentorId = Number(mentorId.match(/-(\d+)$/)?.[1]);
+      if (!student || !Number.isInteger(liveMentorId)) return;
+      try {
+        if (assigned) await assignMentor(student.studentId, liveMentorId);
+        else await unassignMentor(student.studentId);
+        const refreshed = await getStudents();
+        setData(refreshed);
+        setMessage(rtl ? "تم تحديث توزيع المنتور." : "Mentor assignment updated.");
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Could not update the mentor assignment.",
+        );
+      }
+      return;
+    }
     if (apiReadOnly) {
       explainReadOnlyApi();
       return;
@@ -1467,7 +1628,7 @@ export function Dashboard({
               onClick={() => nav("manage")}
             />
           )}
-          {(isManager ||
+          {!usingLiveApi && (isManager ||
             (session.role === "mentor" && can("manageAccounts"))) && (
             <NavItem
               icon="♧"
@@ -1751,6 +1912,7 @@ export function Dashboard({
                     rows={rows}
                     interventions={interventions}
                     lang={lang}
+                    kpis={onTrackKpis}
                     onOpenTeam={() => nav("team")}
                     onOpenMentor={openMentorWorkspace}
                   />
@@ -2148,22 +2310,15 @@ export function Dashboard({
                               {dateText(item.createdAt.slice(0, 10), lang)}
                             </small>
                           </div>
-                          <button
-                            className="row-more"
-                            aria-label="Remove follow-up"
-                            onClick={() => {
-                              if (apiReadOnly) {
-                                explainReadOnlyApi();
-                                return;
-                              }
-                              setInterventions((current) =>
-                                current.filter((entry) => entry.id !== item.id),
-                              );
-                              setMessage(t.removed);
-                            }}
-                          >
-                            ×
-                          </button>
+                          {canDeleteFollowUp(item) && (
+                            <button
+                              className="row-more"
+                              aria-label="Remove follow-up"
+                              onClick={() => void removeFollowUp(item)}
+                            >
+                              ×
+                            </button>
+                          )}
                         </article>
                       );
                     })}
@@ -2200,7 +2355,7 @@ export function Dashboard({
                 }}
               />
             )}
-          {(isManager ||
+          {!usingLiveApi && (isManager ||
             (session.role === "mentor" && can("manageAccounts"))) &&
             section === "accounts" && (
               <AccountManager
@@ -2247,6 +2402,7 @@ export function Dashboard({
                 mentors={mentorAccounts}
                 interventions={interventions}
                 lang={lang}
+                kpis={onTrackKpis}
                 onSelectStudent={setSelectedStudent}
                 onBack={() => setViewedMentorId(null)}
                 onActAs={() => beginActingAsMentor(viewedMentor)}
@@ -2278,6 +2434,7 @@ export function Dashboard({
                 mentors={mentorAccounts}
                 interventions={interventions}
                 lang={lang}
+                kpis={onTrackKpis}
                 onSelectStudent={setSelectedStudent}
                 onBack={() => setViewedMentorId(null)}
                 onActAs={() => beginActingAsMentor(viewedMentor)}
@@ -2288,6 +2445,7 @@ export function Dashboard({
                 rows={rows}
                 interventions={interventions}
                 lang={lang}
+                kpis={onTrackKpis}
                 onOpenMentor={openMentorWorkspace}
               />
             ))}
