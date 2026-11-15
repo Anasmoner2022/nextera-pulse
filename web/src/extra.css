@@ -418,3 +418,8 @@ html[dir=rtl] .sidebar .nav-item i {
     left:1px
   }
 }
+
+.toast-message.toast-error { border-color:color-mix(in srgb,#e47c70 55%,transparent); background:color-mix(in srgb,#e47c70 16%,var(--surface)); color:var(--text); }
+.mentor-picker-remove { border-top:1px solid var(--soft); border-radius:0 0 10px 10px; }
+.mentor-picker-remove b { color:#c9574a; }
+.followup-no-students { margin:12px 0; padding:14px 16px; border-radius:12px; color:var(--text); font-size:13px; }

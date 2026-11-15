@@ -10,6 +10,21 @@ jobs:
   go:
     name: Go — build & test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: nextera_pulse_test
+          POSTGRES_USER: nextera_pulse
+          POSTGRES_PASSWORD: nextera_pulse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nextera_pulse -d nextera_pulse_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://nextera_pulse:nextera_pulse@localhost:5432/nextera_pulse_test?sslmode=disable
+      PULSE_REQUIRE_PG: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -24,8 +39,8 @@ jobs:
       - name: Build Worker
         run: go build ./cmd/worker/...
 
-      - name: Run tests
-        run: go test ./...
+      - name: Run tests (PostgreSQL)
+        run: go test -race ./...
 
       - name: Vet
         run: go vet ./...
@@ -42,7 +57,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc  # Node 22 LTS
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -52,5 +67,16 @@ jobs:
       - name: Type check
         run: npm run type-check
 
+      - name: Unit checks
+        run: npm test
+
       - name: Build
         run: npm run build
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t nextera-pulse:ci .

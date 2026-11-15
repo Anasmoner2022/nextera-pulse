@@ -1,5 +1,5 @@
 # Nextera Pulse — 01Edu query pack
-# Event 97 is the main curriculum event.
+# The curriculum event id is ZEROONE_EVENT_ID (default 97); substitute it in the queries below.
 # Pilot cohort label: "01 Coding - Second Cohort"
 
 query PulseEventConfig($eventId: Int!) {
@@ -122,4 +122,21 @@ query PulseAuditsSince($since: timestamptz!, $limit: Int!, $offset: Int!) {
     automated
     updatedAt
   }
+}
+
+# Roster (replaces the zip export). Used by internal/zeroone/roster_live.go.
+query PulseCohortLabels($names: [String!]!) {
+  label(where: {name: {_in: $names}}, order_by: {id: asc}) { id name eventId description }
+}
+
+query PulseLabelUsers($labelIds: [Int!]!, $limit: Int!, $offset: Int!) {
+  label_user(where: {labelId: {_in: $labelIds}}, order_by: {id: asc}, limit: $limit, offset: $offset) { id labelId userId }
+}
+
+query PulseUsers($ids: [Int!]!) {
+  user(where: {id: {_in: $ids}}, order_by: {id: asc}) { id login firstName lastName email }
+}
+
+query PulseStaff($roles: [String!]!) {
+  user(where: {role: {_in: $roles}}, order_by: {id: asc}) { id login role }
 }

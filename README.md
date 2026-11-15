@@ -92,20 +92,29 @@ Statuses that do **not** pause the clock:
 - `temporary-notice`
 - `observation`
 
-### Active KPI population
+### On-track rate (North Star KPI)
 
-Excluded from active pace KPI denominators:
+```text
+on-track rate = GREEN students / measurable students
+```
+
+Measurable students have a pace status of GREEN, YELLOW or RED, and a source
+status that `status_policy.exclude_from_active_kpis` does not flag. The flag is
+read from the table, not from code; by default it excludes:
 
 - `restricted`
 - `blocked-long`
 - `ban`
 - `left-school`
 
-Included:
+`away`, `temporary-notice` and `observation` stay in the population.
 
-- `away`
-- `temporary-notice`
-- `observation`
+- YELLOW ("Watch") is measurable but not on track, and it is reported
+  separately.
+- With no measurable students the rate is null and the dashboard shows "—",
+  not 0%.
+- The server computes the rate per cohort, per mentor and program-wide
+  (`GET /api/v1/kpi/on-track`); see `docs/ON_TRACK_RATE.md`.
 
 ### Mentor assignment
 
@@ -146,16 +155,56 @@ Do not create catch-all `services` or `utils` packages for unrelated business lo
 
 ## Development
 
-The exact bootstrap commands will be added once the initial Go module and React application are committed.
+Local dependencies: Go 1.26.2+ (go.mod), Node.js 22 LTS (`.nvmrc`; CI uses the same), and PostgreSQL 17 (Docker
+Compose is the easiest way to get it). Pulse runs on **PostgreSQL only**;
+`DATABASE_URL` must be a `postgres://` URL and the API refuses to start
+otherwise. The schema is embedded in the binaries and applied on start.
 
-Expected local dependencies:
-
-- Go
-- Node.js
-- Docker
-- Docker Compose
+```sh
+cp .env.example .env     # never commit .env
+make dev-up              # postgres:17 on 127.0.0.1:5432 (+ nextera_pulse_test DB)
+make test                # go test ./... against TEST_DATABASE_URL
+```
 
 Never commit real secrets. Start from `.env.example`.
+
+### Live 01Edu data
+
+01Edu is the only data source; there is no zip/file import. On a schedule the
+API reads the cohort roster (labels), staff roles, levels, status records,
+project progress, and rebuilds pace snapshots from
+`https://01.nexteraeducation.net`, using a server-side credential
+(`ZEROONE_ACCESS_TOKEN`, a Gitea application token from a campus admin, or
+`ZEROONE_LOGIN`/`ZEROONE_PASSWORD`). Without one the API serves whatever the
+last sync stored, and the web app can still run on synthetic data with
+`VITE_STUDENTS_SOURCE=mock`.
+
+With or without a credential, the API also refreshes the daily pace snapshots
+from stored data at startup and every `SNAPSHOT_INTERVAL` (default `24h`), so
+curriculum month, pace status and KPIs keep moving with the calendar. This
+job never calls 01Edu. PostgreSQL advisory locks keep a single live sync
+and a single snapshot refresh running at a time across instances; see
+docs/LIVE_DATA.md.
+
+```sh
+cp .env.example .env                 # fill ZEROONE_ACCESS_TOKEN
+make dev-up                          # PostgreSQL 17
+go run ./cmd/api                     # uses DATABASE_URL from .env; first sync fills the roster
+curl -s localhost:8080/api/v1/sync/status
+cd web && npm install && npm run dev
+```
+
+See [docs/LIVE_DATA.md](docs/LIVE_DATA.md) for the endpoints, env vars, and
+what still needs checking against the live schema.
+
+### Sign-in
+
+Everyone signs in with their 01Edu login and password; the API checks them
+with 01Edu, then sets its own HttpOnly session cookie (stored in PostgreSQL).
+Every `/api/v1` route except sign-in needs that cookie, and the server limits
+what each role sees (manager: everyone, mentor: assigned students, student:
+themselves). For local plain-HTTP development set `SESSION_COOKIE_SECURE=false`
+in `.env`. See [docs/AUTH.md](docs/AUTH.md).
 
 ## Important engineering rules
 
