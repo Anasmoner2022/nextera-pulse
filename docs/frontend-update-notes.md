@@ -16,6 +16,7 @@ This update extends the existing Nextera Pulse frontend with the dashboard impro
 - Improved mentor workspace actions and cross-mentor visibility while retaining role-based access behavior.
 - Refined dashboard navigation, section layout, responsive behavior, transitions, and light/dark styling.
 - Added English code comments around the main dashboard state, data derivation, feature components, and rendering sections.
+- Kept project audits out of this update while the audit workflow is still being designed. Audit source files are parked outside the compiled frontend.
 
 ## Data and Integration Notes
 
@@ -23,4 +24,4 @@ Demo-created accounts, profile edits, assignments, and follow-up notes are store
 
 ## Validation
 
-The frontend type check, automated unit tests, and production build are run as part of preparing this update. Results are recorded in the pull request summary after validation completes.
+The frontend type check, automated unit tests, and production build all pass.
