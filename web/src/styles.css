@@ -16,6 +16,12 @@
   --brand-green:#78e860;
   --brand-gradient:linear-gradient(125deg,var(--brand-teal),var(--brand-green));
   --shadow:0 8px 28px #244b4b08;
+  --text-xs:.75rem;
+  --text-sm:.875rem;
+  --text-md:1rem;
+  --text-lg:1.25rem;
+  --text-xl:1.75rem;
+  --text-kpi:2rem;
   font-synthesis:none;
   text-rendering:optimizeLegibility
 }
@@ -79,7 +85,7 @@ html[dir=rtl] .sidebar {
 .brand-mark span {
   position:absolute;
   color:#e5fff2;
-  font-size:10px;
+  font-size:var(--text-xs);
   right:1px;
   top:1px
 }
@@ -93,13 +99,13 @@ html[dir=rtl] .sidebar {
   letter-spacing:1.5px
 }
 .brand-copy small {
-  font-size:9px;
+  font-size:var(--text-xs);
   letter-spacing:3px;
   color:#82918f;
   margin-top:5px
 }
 .workspace-label,.eyebrow {
-  font-size:10px;
+  font-size:var(--text-xs);
   font-weight:700;
   letter-spacing:1px;
   color:#829392
@@ -125,7 +131,7 @@ html[dir=rtl] .sidebar {
   background:#ddf6ec;
   color:#1b9b83;
   font-weight:800;
-  font-size:11px
+  font-size:var(--text-xs)
 }
 .cohort-card>span:nth-child(2) {
   display:grid;
@@ -134,20 +140,20 @@ html[dir=rtl] .sidebar {
   flex:1
 }
 .cohort-card small {
-  font-size:9px;
+  font-size:var(--text-xs);
   color:#81918e;
   text-transform:uppercase;
   letter-spacing:1px
 }
 .cohort-card b {
-  font-size:10px;
+  font-size:var(--text-xs);
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis
 }
 .chevron {
   color:#899692;
-  font-size:16px
+  font-size:var(--text-md)
 }
 .nav-list {
   display:grid;
@@ -162,11 +168,11 @@ html[dir=rtl] .sidebar {
   padding:0 11px;
   border-radius:9px;
   color:#718082;
-  font-size:12px;
+  font-size:var(--text-sm);
   font-weight:600
 }
 .nav-item>span:first-child {
-  font-size:17px;
+  font-size:var(--text-lg);
   width:19px;
   text-align:center;
   color:#81908e
@@ -181,7 +187,7 @@ html[dir=rtl] .sidebar {
 .nav-item i {
   margin-left:auto;
   font-style:normal;
-  font-size:10px;
+  font-size:var(--text-xs);
   background:#d2f0e6;
   padding:3px 7px;
   border-radius:10px
@@ -191,7 +197,7 @@ html[dir=rtl] .sidebar {
 }
 .nav-item em {
   margin-left:auto;
-  font-size:8px;
+  font-size:var(--text-xs);
   font-style:normal;
   background:#f0f2f2;
   padding:4px 6px;
@@ -217,7 +223,7 @@ html[dir=rtl] .sidebar {
   border-radius:50%;
   width:23px;
   height:23px;
-  font-size:12px
+  font-size:var(--text-sm)
 }
 .help-card div,.user-card>div {
   display:grid;
@@ -225,10 +231,10 @@ html[dir=rtl] .sidebar {
   flex:1
 }
 .help-card b,.user-card b {
-  font-size:10px
+  font-size:var(--text-xs)
 }
 .help-card small,.user-card small {
-  font-size:9px;
+  font-size:var(--text-xs);
   color:var(--muted)
 }
 .help-card>span:last-child {
@@ -246,7 +252,7 @@ html[dir=rtl] .sidebar {
   place-items:center;
   flex:0 0 auto;
   border-radius:50%;
-  font-size:10px;
+  font-size:var(--text-xs);
   font-weight:700
 }
 .mentor-avatar {
@@ -279,7 +285,7 @@ html[dir=rtl] .main-area {
   padding:0 36px
 }
 .breadcrumb {
-  font-size:11px;
+  font-size:var(--text-xs);
   color:#91a09f
 }
 .breadcrumb span {
@@ -303,7 +309,7 @@ html[dir=rtl] .main-area {
   display:flex;
   align-items:center;
   gap:6px;
-  font-size:9px;
+  font-size:var(--text-xs);
   color:#528474;
   font-weight:600
 }
@@ -314,7 +320,7 @@ html[dir=rtl] .main-area {
   border-radius:50%
 }
 .theme-toggle {
-  font-size:17px;
+  font-size:var(--text-lg);
   width:27px;
   height:27px
 }
@@ -323,11 +329,11 @@ html[dir=rtl] .main-area {
   background:var(--surface);
   color:#5f706f;
   border-radius:7px;
-  font-size:10px;
+  font-size:var(--text-xs);
   padding:6px 9px
 }
 .notification {
-  font-size:18px;
+  font-size:var(--text-lg);
   position:relative
 }
 .notification i {
@@ -359,7 +365,7 @@ html[dir=rtl] .main-area {
 .eyebrow {
   letter-spacing:.2px;
   text-transform:none;
-  font-size:11px;
+  font-size:var(--text-xs);
   color:#52a391
 }
 .page-heading h1 {
@@ -371,7 +377,7 @@ html[dir=rtl] .main-area {
   color:var(--mint)
 }
 .page-heading p,.table-heading p {
-  font-size:11px;
+  font-size:var(--text-xs);
   color:#81908f;
   margin:0
 }
@@ -381,7 +387,7 @@ html[dir=rtl] .main-area {
   border-radius:8px;
   color:#657573;
   padding:9px 11px;
-  font-size:10px;
+  font-size:var(--text-xs);
   display:flex;
   align-items:center;
   gap:9px
@@ -421,7 +427,7 @@ html[dir=rtl] .main-area {
   display:grid;
   place-items:center;
   border-radius:8px;
-  font-size:15px
+  font-size:var(--text-md)
 }
 .stat-icon.mint {
   color:#24a695;
@@ -440,7 +446,7 @@ html[dir=rtl] .main-area {
   background:#eff2f3
 }
 .stat-label {
-  font-size:10px;
+  font-size:var(--text-xs);
   color:#788784;
   font-weight:600
 }
@@ -453,14 +459,14 @@ html[dir=rtl] .main-area {
   grid-column:1/3;
   grid-row:3;
   color:#98a4a2;
-  font-size:9px
+  font-size:var(--text-xs)
 }
 .stat-spark {
   position:absolute;
   right:13px;
   bottom:20px;
   color:#c9e8dc;
-  font-size:24px
+  font-size:var(--text-xl)
 }
 .table-panel {
   background:var(--surface);
@@ -480,7 +486,7 @@ html[dir=rtl] .main-area {
   margin:0 0 5px
 }
 .table-heading p {
-  font-size:10px
+  font-size:var(--text-xs)
 }
 .cohort-pill {
   display:flex;
@@ -490,7 +496,7 @@ html[dir=rtl] .main-area {
   border-radius:7px;
   background:#f7f9f8;
   border:1px solid #edf0ef;
-  font-size:9px;
+  font-size:var(--text-xs);
   color:#697a76
 }
 .filter-bar {
@@ -513,7 +519,7 @@ html[dir=rtl] .main-area {
   background:var(--surface)
 }
 .search-box>span {
-  font-size:18px;
+  font-size:var(--text-lg);
   color:#97a5a2
 }
 .search-box input {
@@ -523,7 +529,7 @@ html[dir=rtl] .main-area {
   flex:1;
   color:var(--text);
   background:transparent;
-  font-size:10px
+  font-size:var(--text-xs)
 }
 .search-box input::placeholder {
   color:#a1adaa
@@ -544,14 +550,14 @@ html[dir=rtl] .main-area {
   padding:0 9px;
   color:#657472;
   background:var(--surface);
-  font-size:10px;
+  font-size:var(--text-xs);
   outline-color:#8bd9c7
 }
 .clear-filters {
   border:0;
   background:none;
   color:#178b7d;
-  font-size:10px;
+  font-size:var(--text-xs);
   white-space:nowrap
 }
 .table-scroll {
@@ -569,7 +575,7 @@ th {
   height:37px;
   text-align:left;
   padding:0 11px;
-  font-size:9px;
+  font-size:var(--text-xs);
   color:#82908e;
   font-weight:600
 }
@@ -580,7 +586,7 @@ td {
   height:60px;
   border-top:1px solid #eef1f0;
   padding:0 11px;
-  font-size:10px;
+  font-size:var(--text-xs);
   color:#596966
 }
 .student-cell {
@@ -594,18 +600,18 @@ td {
   gap:4px
 }
 .student-cell b {
-  font-size:10px;
+  font-size:var(--text-xs);
   color:var(--text);
   font-weight:600
 }
 .student-cell small {
-  font-size:9px;
+  font-size:var(--text-xs);
   color:#97a3a1
 }
 .student-avatar {
   width:31px;
   height:31px;
-  font-size:9px
+  font-size:var(--text-xs)
 }
 .avatar-1 {
   background:#fce8dd;
@@ -629,7 +635,7 @@ td {
   gap:4px
 }
 .days-cell small,.level-cell small {
-  font-size:8px;
+  font-size:var(--text-xs);
   color:#a0aaa8
 }
 .muted {
@@ -651,7 +657,7 @@ td {
   gap:5px;
   padding:5px 7px;
   border-radius:12px;
-  font-size:9px;
+  font-size:var(--text-xs);
   font-weight:600
 }
 .status-badge i {
@@ -688,7 +694,7 @@ td {
   border:0;
   background:none;
   color:#869491;
-  font-size:18px;
+  font-size:var(--text-lg);
   letter-spacing:1px
 }
 .table-footer {
@@ -699,7 +705,7 @@ td {
   justify-content:space-between;
   padding:0 19px;
   color:#9ba6a4;
-  font-size:9px
+  font-size:var(--text-xs)
 }
 .state-card {
   min-height:230px;
@@ -709,7 +715,7 @@ td {
   flex-direction:column;
   gap:10px;
   color:#778581;
-  font-size:11px
+  font-size:var(--text-xs)
 }
 .state-card p {
   margin:0
@@ -727,7 +733,7 @@ td {
 .error-state h3 {
   margin:4px 0 0;
   color:var(--text);
-  font-size:14px
+  font-size:var(--text-md)
 }
 .error-state p {
   max-width:420px;
@@ -740,7 +746,7 @@ td {
   color:#fff;
   border-radius:7px;
   padding:8px 13px;
-  font-size:10px;
+  font-size:var(--text-xs);
   font-weight:600
 }
 .spinner {
@@ -766,24 +772,24 @@ td {
   color:#85928f
 }
 .empty-state>span {
-  font-size:26px;
+  font-size:var(--text-xl);
   color:#b4c9c2
 }
 .empty-state b {
-  font-size:11px;
+  font-size:var(--text-xs);
   font-weight:500
 }
 .empty-state button {
   border:0;
   background:transparent;
   color:#158d7e;
-  font-size:10px
+  font-size:var(--text-xs)
 }
 .page-footer {
   display:flex;
   justify-content:space-between;
   color:#a0aba8;
-  font-size:9px;
+  font-size:var(--text-xs);
   padding:18px 2px 0
 }
 html[data-theme=dark] {
@@ -878,11 +884,11 @@ html[dir=rtl] .notification i {
   object-position:center
 }
 .brand-copy b {
-  font-size:12px;
+  font-size:var(--text-sm);
   letter-spacing:1.5px
 }
 .brand-copy small {
-  font-size:7px;
+  font-size:var(--text-xs);
   letter-spacing:1px
 }
 .brand-copy b { color:var(--text); }
@@ -935,13 +941,13 @@ html[data-theme=dark] .student-row:hover {
   margin:0 0 4px
 }
 .detail-header small {
-  font-size:10px;
+  font-size:var(--text-xs);
   color:var(--muted)
 }
 .detail-header .student-avatar {
   width:43px;
   height:43px;
-  font-size:12px
+  font-size:var(--text-sm)
 }
 .detail-close {
   width:31px;
@@ -950,14 +956,14 @@ html[data-theme=dark] .student-row:hover {
   border-radius:8px;
   background:var(--surface);
   color:var(--muted);
-  font-size:22px;
+  font-size:var(--text-lg);
   line-height:1
 }
 .detail-body {
   padding:22px 23px
 }
 .detail-cohort {
-  font-size:10px;
+  font-size:var(--text-xs);
   color:var(--muted);
   margin:10px 0 19px
 }
@@ -985,11 +991,11 @@ html[dir=rtl] .detail-field:nth-child(odd) {
   border-left:1px solid var(--line)
 }
 .detail-field small {
-  font-size:9px;
+  font-size:var(--text-xs);
   color:var(--muted)
 }
 .detail-field b {
-  font-size:12px;
+  font-size:var(--text-sm);
   font-weight:600
 }
 .reason-box {
@@ -1001,14 +1007,14 @@ html[dir=rtl] .detail-field:nth-child(odd) {
   background:var(--soft)
 }
 .reason-box b {
-  font-size:10px
+  font-size:var(--text-xs)
 }
 .reason-box span {
-  font-size:10px;
+  font-size:var(--text-xs);
   color:var(--muted)
 }
 .detail-footnote {
-  font-size:9px;
+  font-size:var(--text-xs);
   line-height:1.6;
   color:#98a5a1;
   margin-top:18px
@@ -1021,10 +1027,10 @@ html[dir=rtl] .detail-field:nth-child(odd) {
   justify-content:space-between;
   margin-top:20px;
   padding:0 15px;
-  font-size:11px
+  font-size:var(--text-xs)
 }
 .student-action-button span {
-  font-size:17px;
+  font-size:var(--text-lg);
   line-height:1
 }
 .detail-backdrop[dir=rtl] {
@@ -1115,10 +1121,10 @@ table {
     font-size:0
   }
 .nav-item.active>span {
-    font-size:19px
+    font-size:var(--text-lg)
   }
 .nav-item.active i {
-    font-size:9px;
+    font-size:var(--text-xs);
     position:absolute;
     margin:0 0 0 34px
   }
@@ -1133,7 +1139,7 @@ html[dir=rtl] .main-area {
     height:56px
   }
 .breadcrumb {
-    font-size:9px
+    font-size:var(--text-xs)
   }
 .top-actions {
     gap:9px
@@ -1145,7 +1151,7 @@ html[dir=rtl] .main-area {
     padding:23px 13px
   }
 .page-heading h1 {
-    font-size:24px
+    font-size:var(--text-xl)
   }
 .page-heading p {
     max-width:220px;
@@ -1157,10 +1163,10 @@ html[dir=rtl] .main-area {
     padding:8px
   }
 .date-chip>span:first-child {
-    font-size:13px
+    font-size:var(--text-sm)
   }
 .date-caret {
-    font-size:12px
+    font-size:var(--text-sm)
   }
 .stats-grid {
     gap:8px
@@ -1170,10 +1176,10 @@ html[dir=rtl] .main-area {
     padding:11px
   }
 .stat-label {
-    font-size:9px
+    font-size:var(--text-xs)
   }
 .stat-card>small {
-    font-size:8px
+    font-size:var(--text-xs)
   }
 .table-heading {
     align-items:flex-start;
@@ -1201,10 +1207,10 @@ html[dir=rtl] .main-area {
   }
 .table-footer {
     padding:0 12px;
-    font-size:8px
+    font-size:var(--text-xs)
   }
 .page-footer {
-    font-size:8px
+    font-size:var(--text-xs)
   }
 th:first-child,td:first-child {
     padding-left:13px
@@ -1215,7 +1221,7 @@ html[dir=rtl] th:first-child,html[dir=rtl] td:first-child {
 }
 
 .topbar-signout-btn {
-  font-size:12px;
+  font-size:var(--text-sm);
   padding:5px 12px;
   border-radius:8px;
   cursor:pointer;

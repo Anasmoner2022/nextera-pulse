@@ -1,19 +1,53 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
-import { assignMentor, createFollowUp, deleteFollowUp, getFollowUps, getStaff, getStudents, unassignMentor, usesLiveApi } from '../data/students';
-import type { StaffMember } from '../data/students';
-import { timeAgo, useSyncStatus } from '../data/syncStatus';
-import { describeOnTrack } from '../domain';
-import { useOnTrackKpis } from './onTrack';
-import type { StudentPaceRow, StudentsResponse } from '../domain';
-import { AccountManager, ProfileAvatar, ProfilePage, readAccounts, writeAccounts } from '../identity';
-import { defaultPermissions } from '../identity/defaults';
-import type { AccessKey, PulseAccount, PulseSession } from '../identity';
-import { persistProfileAccount } from '../accountPersistence.js';
-import { assignStudentToMentor, visibleStudentsForRole } from '../studentAccess.mjs';
-import { createDemoStudentRecord, syncStudentIdentity } from '../studentRecordSync.mjs';
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import {
-  InfoDialog,
+  Bell,
+  ClipboardList,
+  LayoutDashboard,
+  Layers3,
+  LogOut,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  Settings as SettingsIcon,
+  ShieldCheck,
+  Sun,
+  UsersRound,
+  UserRoundPlus,
+} from "lucide-react";
+import {
+  assignMentor,
+  createFollowUp,
+  deleteFollowUp,
+  getFollowUps,
+  getStaff,
+  getStudents,
+  unassignMentor,
+} from "../data/students";
+import type { StaffMember } from "../data/students";
+import { useSyncStatus } from "../data/syncStatus";
+import { isInActiveKpiPopulation } from "../domain";
+import type { PaceStatus, StudentPaceRow, StudentsResponse } from "../domain";
+import {
+  AccountManager,
+  ProfileAvatar,
+  ProfilePage,
+  readAccounts,
+  writeAccounts,
+} from "../identity";
+import type { AccessKey, PulseAccount, PulseSession } from "../identity";
+import { defaultPermissions } from "../identity/defaults";
+import { persistProfileAccount } from "../accountPersistence.js";
+import {
+  assignStudentToMentor,
+  visibleStudentsForRole,
+} from "../studentAccess.mjs";
+import {
+  createDemoStudentRecord,
+  syncStudentIdentity,
+} from "../studentRecordSync.mjs";
+import {
   ManagerOverview,
   ManageStudents,
   MentorAnalytics,
@@ -32,301 +66,2445 @@ import {
   StudentHome,
   StudentProfileInsights,
   StudentRow,
-  TeamHierarchy,
   TeamManagement,
-} from './components';
-import { dateText, normalizeLogin, statusNames, statuses, text } from './config';
-import type { Intervention, Language, Section } from './config';
-import './hierarchy.css';
-import './student-profile-insights.css';
+} from "./components";
+import {
+  dateText,
+  normalizeLogin,
+  statusNames,
+  statuses,
+  text,
+} from "./config";
+import type { Intervention, Language, Section } from "./config";
+import { useOnTrackKpis } from "./onTrack";
+import "./student-profile-insights.css";
 
-export function Dashboard({ session: signedInSession, onSignOut, onSessionUpdate }: { session: PulseSession; onSignOut: () => void; onSessionUpdate: (session: PulseSession) => void ;}) {
+export function Dashboard({
+  session: signedInSession,
+  onSignOut,
+  onSessionUpdate,
+}: {
+  session: PulseSession;
+  onSignOut: () => void;
+  onSessionUpdate: (session: PulseSession) => void;
+}) {
   // Dashboard coordinates shared workspace state; feature-specific UI stays in
   // the components folder so each section can evolve independently.
   // Keep presentation preferences and transient navigation state near the shell.
-  const lang = 'en' as Language;
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => localStorage.getItem('pulse-theme') === 'dark' ? 'dark' : 'light');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('pulse-sidebar-collapsed') === 'true' || window.innerWidth <= 760);
+  const lang = "en" as Language;
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    localStorage.getItem("pulse-theme") === "dark" ? "dark" : "light",
+  );
+  const [sidebarHidden, setSidebarHidden] = useState(
+    () => localStorage.getItem("pulse-sidebar-hidden") === "true",
+  );
+  const usingLiveApi = (import.meta.env.VITE_STUDENTS_SOURCE ?? "api") === "api";
+  const apiReadOnly = usingLiveApi;
   const [today, setToday] = useState(() => new Date());
-  const [section, setSection] = useState<Section>('overview');
-  const [memberProfileReturnSection, setMemberProfileReturnSection] = useState<Section>('hierarchy');
-  const [overviewTab, setOverviewTab] = useState('summary');
-  const [overviewSubnavOpen, setOverviewSubnavOpen] = useState(false);
+  const [section, setSection] = useState<Section>("overview");
+  const [memberProfileReturnSection, setMemberProfileReturnSection] =
+    useState<Section>("students");
+  const [overviewTab, setOverviewTab] = useState("summary");
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [accounts, setAccounts] = useState<PulseAccount[]>(readAccounts);
   const [profileAccountId, setProfileAccountId] = useState(signedInSession.id);
   const [viewedMentorId, setViewedMentorId] = useState<string | null>(null);
-  const [actingAsMentor, setActingAsMentor] = useState<PulseSession | null>(null);
+  const [actingAsMentor, setActingAsMentor] = useState<PulseSession | null>(
+    null,
+  );
   const [data, setData] = useState<StudentsResponse | null>(null);
-  const [staff, setStaff] = useState<{ managers: StaffMember[]; mentors: StaffMember[] } | null>(null);
-  const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('ALL');
-  const [month, setMonth] = useState('ALL');
+  const [staff, setStaff] = useState<{
+    managers: StaffMember[];
+    mentors: StaffMember[];
+  } | null>(null);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("ALL");
+  const [month, setMonth] = useState("ALL");
+  const [sourceStatus, setSourceStatus] = useState("ALL");
+  const [studentPage, setStudentPage] = useState(1);
   const [retry, setRetry] = useState(0);
-  const [selectedStudent, setSelectedStudent] = useState<StudentPaceRow | null>(null);
-  const [profileStudent, setProfileStudent] = useState<StudentPaceRow | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<StudentPaceRow | null>(
+    null,
+  );
+  const [profileStudent, setProfileStudent] = useState<StudentPaceRow | null>(
+    null,
+  );
   const [readOnlyProfile, setReadOnlyProfile] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationWrap = useRef<HTMLDivElement>(null);
-  const [completedNotifications, setCompletedNotifications] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(`pulse-completed-notifications:${signedInSession.id}`) || '[]') as string[]; } catch { return []; } });
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [toast, setToast] = useState<{ text: string; error: boolean }>({ text: '', error: false });
-  const message = toast.text, messageIsError = toast.error;
-  const setMessage = (text: string) => setToast({ text, error: false });
-  const showError = (text: string) => setToast({ text, error: true });
+  const [completedNotifications, setCompletedNotifications] = useState<
+    string[]
+  >(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem(
+          `pulse-completed-notifications:${signedInSession.id}`,
+        ) || "[]",
+      ) as string[];
+    } catch {
+      return [];
+    }
+  });
+  const [message, setMessage] = useState("");
   const [showInterventionForm, setShowInterventionForm] = useState(false);
-  const [interventionStudent, setInterventionStudent] = useState('');
-  const [interventionNote, setInterventionNote] = useState('');
-  const [interventions, setInterventions] = useState<Intervention[]>(() => { if (usesLiveApi()) return []; try { return JSON.parse(localStorage.getItem('pulse-interventions') || '[]') as Intervention[]; } catch { return []; } });
+  const [interventionStudent, setInterventionStudent] = useState("");
+  const [interventionNote, setInterventionNote] = useState("");
+  const [interventions, setInterventions] = useState<Intervention[]>(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("pulse-interventions") || "[]",
+      ) as Intervention[];
+    } catch {
+      return [];
+    }
+  });
   const interventionTextarea = useRef<HTMLTextAreaElement>(null);
-  const [managedStudents, setManagedStudents] = useState<StudentPaceRow[]>(() => { try { return JSON.parse(localStorage.getItem('pulse-managed-students') || '[]') as StudentPaceRow[]; } catch { return []; } });
-  const [deletedStudentIds, setDeletedStudentIds] = useState<number[]>(() => { try { return JSON.parse(localStorage.getItem('pulse-deleted-students') || '[]') as number[]; } catch { return []; } });
-  const [editingStudent, setEditingStudent] = useState<StudentPaceRow | null>(null);
+  const [managedStudents, setManagedStudents] = useState<StudentPaceRow[]>(
+    () => {
+      try {
+        return JSON.parse(
+          localStorage.getItem("pulse-managed-students") || "[]",
+        ) as StudentPaceRow[];
+      } catch {
+        return [];
+      }
+    },
+  );
+  const [deletedStudentIds, setDeletedStudentIds] = useState<number[]>(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("pulse-deleted-students") || "[]",
+      ) as number[];
+    } catch {
+      return [];
+    }
+  });
+  const [editingStudent, setEditingStudent] = useState<StudentPaceRow | null>(
+    null,
+  );
   const [studentFormOpen, setStudentFormOpen] = useState(false);
   const searchInput = useRef<HTMLInputElement>(null);
-  const t = text[lang], rtl = lang === 'ar';
-  const usingLiveApi = (import.meta.env.VITE_STUDENTS_SOURCE ?? 'api') === 'api';
-  // Where the roster comes from: backend live 01Edu sync (or its last result when offline), or synthetic demo.
   const { status: syncStatus } = useSyncStatus();
-  const liveSynced = usingLiveApi && data?.dataSource === 'live';
-  const syncAge = timeAgo(data?.syncedAt ?? syncStatus?.lastSuccessAt, today);
-  // The monthly targets behind the pace statuses are versioned on the server; flag a rule Product has not approved.
-  const paceRule = usingLiveApi ? data?.paceRule : undefined;
-  const paceRuleNote = paceRule && !paceRule.approved ? (paceRule.version ? `Pace rule ${paceRule.version} (unapproved)` : 'No pace rule configured') : '';
-  const baseSourceLabel = !usingLiveApi ? t.demo
-    : liveSynced ? (rtl ? `01Edu مباشر · ${syncAge}` : `Live 01Edu · ${syncAge || 'synced'}${syncStatus?.lastError ? ' · sync issue' : ''}`)
-    : syncStatus?.mode === 'live' ? (syncStatus.lastError ? (rtl ? 'تعذرت المزامنة' : 'Live sync issue') : (rtl ? 'جارٍ المزامنة…' : 'Syncing 01Edu…'))
-    : (rtl ? '01Edu غير متصل' : 'Offline · last 01Edu sync');
-  const sourceLabel = paceRuleNote ? `${baseSourceLabel} · ${paceRuleNote}` : baseSourceLabel;
-  const baseSourceDescription = !usingLiveApi ? t.demoDescription
-    : liveSynced ? (rtl ? 'الطلاب والمستويات والسجلات والمشاريع تُحدَّث من 01Edu تلقائيًا عبر الخلفية.' : `Levels, status records and project progress are refreshed from 01Edu by the backend every ${Math.round((syncStatus?.intervalSeconds ?? 1800) / 60)} min. Last sync ${syncAge || 'unknown'}.${syncStatus?.lastError ? ` Latest attempt failed: ${syncStatus.lastError}` : ''}`)
-    : syncStatus?.mode === 'live' ? (syncStatus.lastError ? `Live sync is configured but failed: ${syncStatus.lastError}. Showing the last stored data.` : 'Live sync is configured; the first 01Edu sync is still running. Showing the last stored data.')
-    : (rtl ? 'لا توجد بيانات اعتماد 01Edu في الخلفية. تُعرض آخر بيانات تمت مزامنتها. أضف ZEROONE_ACCESS_TOKEN لتفعيل المزامنة المباشرة.' : `The backend has no 01Edu credential, so this is the data from the last live sync${syncAge ? ` (${syncAge})` : ''}. Set ZEROONE_ACCESS_TOKEN on the backend to enable live sync.`);
-  const jobNotes = [syncStatus?.lastSkipped ? `Latest live sync ${syncStatus.lastSkipped}.` : '', syncStatus?.snapshots?.lastSuccessAt ? `Pace snapshots refreshed from stored data ${timeAgo(syncStatus.snapshots.lastSuccessAt, today) || 'recently'}.` : '', syncStatus?.snapshots?.lastError ? `Snapshot refresh failed: ${syncStatus.snapshots.lastError}.` : ''].filter(Boolean).join(' ');
-  const ruleDescription = paceRuleNote ? `${baseSourceDescription} Pace statuses use the monthly targets "${paceRule?.version || 'none'}" (${paceRule?.status}); Product has not approved them yet.` : baseSourceDescription;
-  const sourceDescription = usingLiveApi && jobNotes ? `${ruleDescription} ${jobNotes}` : ruleDescription;
-  const followUpHint = usingLiveApi ? (rtl ? 'تُحفظ المتابعات في واجهة الخلفية.' : 'Follow-ups are saved through the backend API.') : (rtl ? 'سجّل ملاحظات المتابعة محليًا في هذه النسخة التجريبية.' : 'Keep simple follow-up notes in this local demo.');
+  const t = text[lang],
+    rtl = lang === "ar";
   const session = actingAsMentor ?? signedInSession;
-  const updateActiveSession = (nextSession: PulseSession) => { if (actingAsMentor) setActingAsMentor(nextSession); else onSessionUpdate(nextSession); };
+  const updateActiveSession = (nextSession: PulseSession) => {
+    if (actingAsMentor) setActingAsMentor(nextSession);
+    else onSessionUpdate(nextSession);
+  };
 
   // Persist browser preferences and demo records independently from API data.
-  useEffect(() => { localStorage.removeItem('pulse-language'); document.documentElement.lang = 'en'; document.documentElement.dir = 'ltr'; }, []);
-  useEffect(() => { setOverviewTab(session.role === 'student' ? 'progress' : 'summary'); }, [session.id, session.role]);
-  useEffect(() => { localStorage.setItem('pulse-sidebar-collapsed', String(sidebarCollapsed)); }, [sidebarCollapsed]);
-  useEffect(() => { const timer = window.setInterval(() => setToday(new Date()), 60_000); return () => window.clearInterval(timer); }, []);
-  useEffect(() => { localStorage.setItem(`pulse-completed-notifications:${session.id}`, JSON.stringify(completedNotifications)); }, [completedNotifications, session.id]);
-  useEffect(() => { if (!notificationsOpen) return; const handleOutsidePointer = (event: PointerEvent) => { if (!notificationWrap.current?.contains(event.target as Node)) setNotificationsOpen(false); }; document.addEventListener('pointerdown', handleOutsidePointer); return () => document.removeEventListener('pointerdown', handleOutsidePointer); }, [notificationsOpen]);
-  useEffect(() => { localStorage.setItem('pulse-theme', theme); document.documentElement.dataset.theme = theme; }, [theme]);
-  useEffect(() => { if (!usingLiveApi) localStorage.setItem('pulse-interventions', JSON.stringify(interventions)); }, [interventions, usingLiveApi]);
-  useEffect(() => { localStorage.setItem('pulse-managed-students', JSON.stringify(managedStudents)); }, [managedStudents]);
-  useEffect(() => { localStorage.setItem('pulse-deleted-students', JSON.stringify(deletedStudentIds)); }, [deletedStudentIds]);
-  useEffect(() => { writeAccounts(accounts); }, [accounts]);
+  useEffect(() => {
+    localStorage.removeItem("pulse-language");
+    document.documentElement.lang = "en";
+    document.documentElement.dir = "ltr";
+  }, []);
+  useEffect(() => {
+    setOverviewTab(session.role === "student" ? "progress" : "summary");
+  }, [session.id, session.role]);
+  useEffect(() => {
+    localStorage.setItem("pulse-sidebar-hidden", String(sidebarHidden));
+  }, [sidebarHidden]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setToday(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    localStorage.setItem(
+      `pulse-completed-notifications:${session.id}`,
+      JSON.stringify(completedNotifications),
+    );
+  }, [completedNotifications, session.id]);
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const handleOutsidePointer = (event: PointerEvent) => {
+      if (!notificationWrap.current?.contains(event.target as Node))
+        setNotificationsOpen(false);
+    };
+    document.addEventListener("pointerdown", handleOutsidePointer);
+    return () =>
+      document.removeEventListener("pointerdown", handleOutsidePointer);
+  }, [notificationsOpen]);
+  useEffect(() => {
+    localStorage.setItem("pulse-theme", theme);
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+  useEffect(() => {
+    if (!usingLiveApi)
+      localStorage.setItem("pulse-interventions", JSON.stringify(interventions));
+  }, [interventions, usingLiveApi]);
+  useEffect(() => {
+    localStorage.setItem(
+      "pulse-managed-students",
+      JSON.stringify(managedStudents),
+    );
+  }, [managedStudents]);
+  useEffect(() => {
+    localStorage.setItem(
+      "pulse-deleted-students",
+      JSON.stringify(deletedStudentIds),
+    );
+  }, [deletedStudentIds]);
+  useEffect(() => {
+    writeAccounts(accounts);
+  }, [accounts]);
   // Ignore late responses after unmount so a retry cannot apply stale data.
-  useEffect(() => { let live = true; setError(''); getStudents().then(r => { if (live) setData(r); }).catch(e => { if (live) setError(e instanceof Error ? e.message : 'Unknown error'); }); if (usingLiveApi) { getFollowUps().then(rows => { if (live) setInterventions(rows); }).catch(e => { if (live) setError(e instanceof Error ? e.message : 'Unknown error'); }); getStaff().then(next => { if (live) setStaff(next); }).catch(() => { if (live) setStaff(null); }); } return () => { live = false; }; }, [retry, usingLiveApi]);
-  // After each successful backend live sync, reload the roster in place (no loading flash).
-  useEffect(() => { const next = syncStatus?.lastSuccessAt; if (!usingLiveApi || !next || !data || data.syncedAt === next) return; let live = true; getStudents().then(r => { if (live) setData(r); }).catch(() => undefined); return () => { live = false; }; }, [syncStatus?.lastSuccessAt, usingLiveApi]);
-  useEffect(() => { const handleShortcut = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setSection('students'); searchInput.current?.focus(); } if (event.key === 'Escape') { setSelectedStudent(null); setNotificationsOpen(false); setHelpOpen(false); setMessage(''); if (window.matchMedia('(max-width: 760px)').matches) setSidebarCollapsed(true); } }; window.addEventListener('keydown', handleShortcut); return () => window.removeEventListener('keydown', handleShortcut); }, []);
-  useEffect(() => { if (!toast.text) return; const timer = window.setTimeout(() => setToast({ text: '', error: false }), toast.error ? 10000 : 5000); return () => window.clearTimeout(timer); }, [toast]);
-  useEffect(() => { if (section === 'interventions' && showInterventionForm) interventionTextarea.current?.focus(); }, [section, showInterventionForm]);
-  useEffect(() => { const field = interventionTextarea.current; if (!field) return; field.style.height = 'auto'; field.style.height = `${Math.min(field.scrollHeight, 360)}px`; field.style.overflowY = field.scrollHeight > 360 ? 'auto' : 'hidden'; }, [interventionNote, showInterventionForm]);
+  useEffect(() => {
+    let live = true;
+    setError("");
+    getStudents()
+      .then((r) => {
+        if (live) setData(r);
+      })
+      .catch((e) => {
+        if (live) setError(e instanceof Error ? e.message : "Unknown error");
+      });
+    if (usingLiveApi) {
+      getFollowUps()
+        .then((followUps) => {
+          if (live) setInterventions(followUps);
+        })
+        .catch((e) => {
+          if (live) setError(e instanceof Error ? e.message : "Unknown error");
+        });
+      getStaff()
+        .then((next) => {
+          if (live) setStaff(next);
+        })
+        .catch(() => {
+          if (live) setStaff(null);
+        });
+    }
+    return () => {
+      live = false;
+    };
+  }, [retry, usingLiveApi]);
+  useEffect(() => {
+    const lastSuccess = syncStatus?.lastSuccessAt;
+    if (!usingLiveApi || !lastSuccess || !data || data.syncedAt === lastSuccess)
+      return;
+    let active = true;
+    getStudents()
+      .then((next) => {
+        if (active) setData(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [data, syncStatus?.lastSuccessAt, usingLiveApi]);
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSection("students");
+        searchInput.current?.focus();
+      }
+      if (event.key === "Escape") {
+        setSelectedStudent(null);
+        setNotificationsOpen(false);
+        setMessage("");
+        if (window.matchMedia("(max-width: 760px)").matches)
+          setSidebarHidden(true);
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+  useEffect(() => {
+    if (section === "interventions" && showInterventionForm)
+      interventionTextarea.current?.focus();
+  }, [section, showInterventionForm]);
+  useEffect(() => {
+    const field = interventionTextarea.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${Math.min(field.scrollHeight, 360)}px`;
+    field.style.overflowY = field.scrollHeight > 360 ? "auto" : "hidden";
+  }, [interventionNote, showInterventionForm]);
 
-  // Merge API rows with demo-created records. Account edits update identity,
-  // while source-owned pace fields remain authoritative.
-  // Join API pace rows to local demo edits without overriding source-owned metrics.
-  const rows = useMemo(() => { const base = data?.students ?? []; if (usingLiveApi) return base; const saved = new Map(managedStudents.map(student => [student.studentId, student])); const studentAccounts = new Map(accounts.filter(account => account.role === 'student' && account.studentLogin).map(account => [normalizeLogin(account.studentLogin), account])); const baseRows = base.map(student => { const persisted = saved.get(student.studentId); const row = persisted ? { ...student, ...persisted, curriculumRound: persisted.curriculumRound ?? student.curriculumRound, sourceStatus: student.sourceStatus } : student; const account = studentAccounts.get(normalizeLogin(row.login)); return account ? { ...row, login: account.studentLogin ?? row.login, displayName: account.name } : row ;}); const knownLogins = new Set(baseRows.map(student => normalizeLogin(student.login))); const extraRows = managedStudents.filter(student => !base.some(row => row.studentId === student.studentId) && !knownLogins.has(normalizeLogin(student.login))); return [...baseRows, ...extraRows].filter(student => !deletedStudentIds.includes(student.studentId)); }, [data, managedStudents, deletedStudentIds, accounts, usingLiveApi]);
+  // Merge live cohort rows with browser-managed identity changes while keeping
+  // API-owned pace metrics authoritative.
+  const rows = useMemo(() => {
+    const base = data?.students ?? [];
+    if (usingLiveApi) return base;
+    const saved = new Map(
+      managedStudents.map((student) => [student.studentId, student]),
+    );
+    const studentAccounts = new Map(
+      accounts
+        .filter((account) => account.role === "student" && account.studentLogin)
+        .map((account) => [normalizeLogin(account.studentLogin), account]),
+    );
+    const baseRows = base.map((student) => {
+      const persisted = saved.get(student.studentId);
+      const row = persisted
+        ? {
+            ...student,
+            ...persisted,
+            curriculumRound:
+              persisted.curriculumRound ?? student.curriculumRound,
+            sourceStatus: student.sourceStatus,
+          }
+        : student;
+      const account = studentAccounts.get(normalizeLogin(row.login));
+      return account
+        ? {
+            ...row,
+            login: account.studentLogin ?? row.login,
+            displayName: account.name,
+          }
+        : row;
+    });
+    const knownLogins = new Set(
+      baseRows.map((student) => normalizeLogin(student.login)),
+    );
+    const extraRows = managedStudents.filter(
+      (student) =>
+        !base.some((row) => row.studentId === student.studentId) &&
+        !knownLogins.has(normalizeLogin(student.login)),
+    );
+    return [...baseRows, ...extraRows].filter(
+      (student) => !deletedStudentIds.includes(student.studentId),
+    );
+  }, [data, managedStudents, deletedStudentIds, accounts, usingLiveApi]);
   // Derive role-aware cohort, roster, account, and intervention scopes once.
-  const isManager = session.role === 'manager';
-  const savedDemoMentor = accounts.find(account => account.id === 'demo-mentor');
-  const demoMentor: PulseAccount = { id: 'demo-mentor', name: 'Mentor demo', email: 'mentor@nextera.io', role: 'mentor', permissions: ['viewProgress', 'viewCohort', 'manageStudents', 'manageAccounts', 'manageInterventions'], ...savedDemoMentor, assignedStudentLogins: usingLiveApi ? (savedDemoMentor?.assignedStudentLogins ?? []) : (savedDemoMentor?.assignedStudentLogins ?? rows.map(student => student.login)), capacityLimit: savedDemoMentor?.capacityLimit ?? Math.max(20, rows.length) };
-  const staffAccount = (member: StaffMember): PulseAccount => { const assignedStudentLogins = rows.filter(student => student.mentorId === member.studentId).map(student => student.login); return { id: `01edu-${member.pulseRole}-${member.studentId}`, name: member.displayName || member.login, email: member.email, role: member.pulseRole, permissions: defaultPermissions[member.pulseRole], studentLogin: member.login, assignedStudentLogins, capacityLimit: Math.max(20, assignedStudentLogins.length) }; };
-  const liveManagers = (staff?.managers ?? []).map(staffAccount);
-  const liveMentors = (staff?.mentors ?? []).map(staffAccount);
-  const useLiveStaff = usingLiveApi && (liveManagers.length > 0 || liveMentors.length > 0);
-  const localMentorAccounts = [demoMentor, ...accounts.filter(account => account.role === 'mentor' && account.id !== 'demo-mentor')].map(mentor => ({ ...mentor, assignedStudentLogins: [...new Set([...(mentor.assignedStudentLogins ?? []), ...(session.role === 'mentor' && session.id === mentor.id ? (session.assignedStudentLogins ?? []) : []), ...accounts.filter(account => account.role === 'student' && account.mentorId === mentor.id && account.studentLogin).map(account => account.studentLogin!)])] }));
-  const mentorAccounts = useLiveStaff ? liveMentors : localMentorAccounts;
-  const programManagerAccount: PulseAccount = (useLiveStaff ? liveManagers[0] : undefined) ?? accounts.find(account => account.role === 'manager') ?? (session.role === 'manager' ? session : { id: 'demo-manager', name: 'Program Manager', email: 'manager@nextera.io', role: 'manager', permissions: [] });
-  const myAssignedLogins = new Set(session.role === 'mentor' ? (useLiveStaff ? (mentorAccounts.find(mentor => mentor.id === session.id)?.assignedStudentLogins ?? []) : [...(session.assignedStudentLogins ?? (session.id === 'demo-mentor' ? rows.map(student => student.login) : [])), ...accounts.filter(account => account.role === 'student' && account.mentorId === session.id).map(account => account.studentLogin ?? '')]).map(normalizeLogin) : []);
-  const assignedRows = rows.filter(student => myAssignedLogins.has(normalizeLogin(student.login)));
-  const studentLogin = session.role === 'student' ? normalizeLogin(session.studentLogin || session.email.split('@')[0]) : '';
-  const staffLogins = new Set([...(staff?.mentors ?? []), ...(staff?.managers ?? [])].map(member => normalizeLogin(member.login)));
-  const learnerRows = useLiveStaff ? rows.filter(student => !staffLogins.has(normalizeLogin(student.login))) : rows;
-  // Campus mentors and program managers see every learner. An assignment only labels whose mentor the student is.
-  const staffSeesAll = usingLiveApi && (isManager || session.role === 'mentor');
-  const visibleRows = visibleStudentsForRole(session.role, learnerRows, session.role === 'mentor' ? (staffSeesAll ? learnerRows.map(student => student.login) : [...myAssignedLogins]) : [], studentLogin);
-  const visibleInterventionRows = isManager || staffSeesAll ? learnerRows : session.role === 'mentor' ? assignedRows : [];
-  const selectedInterventionStudent = visibleInterventionRows.find(student => String(student.studentId) === interventionStudent);
-  // A mentor with nobody assigned cannot write follow-ups; say so instead of an empty picker.
-  const noStudentsToFollowUp = session.role === 'mentor' && Boolean(data) && visibleInterventionRows.length === 0;
-  // Live: the server says who may delete each note (author or manager). Demo: same rule locally.
-  const canDeleteFollowUp = (item: Intervention) => usingLiveApi ? item.canDelete === true : (isManager || item.authorId === session.id);
-  const removeFollowUp = (item: Intervention) => {
-    if (!usingLiveApi) { setInterventions(current => current.filter(entry => entry.id !== item.id)); setMessage(t.removed); return; }
-    deleteFollowUp(item.id)
-      .then(() => { setInterventions(current => current.filter(entry => entry.id !== item.id)); setMessage(t.removed); })
-      .catch(error => showError(rtl ? `تعذر حذف المتابعة. ${error instanceof Error && error.message !== 'UNAUTHENTICATED' ? error.message : ''}` : `Could not delete the follow-up. ${error instanceof Error && error.message !== 'UNAUTHENTICATED' ? error.message : ''}`.trim()));
+  const isManager = session.role === "manager";
+  const savedDemoMentor = accounts.find(
+    (account) => account.id === "demo-mentor",
+  );
+  const demoMentor: PulseAccount = {
+    id: "demo-mentor",
+    name: "Mentor demo",
+    email: "mentor@nextera.io",
+    role: "mentor",
+    permissions: [
+      "viewProgress",
+      "viewCohort",
+      "manageStudents",
+      "manageAccounts",
+      "manageInterventions",
+    ],
+    ...savedDemoMentor,
+    assignedStudentLogins:
+      savedDemoMentor?.assignedStudentLogins ??
+      rows.map((student) => student.login),
+    capacityLimit: savedDemoMentor?.capacityLimit ?? Math.max(20, rows.length),
   };
-  const visibleInterventions = interventions.filter(item => visibleInterventionRows.some(student => student.studentId === item.studentId));
-  const accountRows = isManager ? [...mentorAccounts, ...accounts.filter(account => account.role === 'student')] : [...mentorAccounts, ...accounts.filter(account => account.role === 'student' && (account.mentorId === session.id || myAssignedLogins.has(normalizeLogin(account.studentLogin))))];
-  const linkedStudentLogins = new Set(accountRows.filter(account => account.role === 'student' && account.studentLogin).map(account => normalizeLogin(account.studentLogin!)));
-  const accountScopeRows = isManager ? learnerRows : assignedRows;
-  const unlinkedStudentRecords = accountScopeRows.filter(student => !linkedStudentLogins.has(normalizeLogin(student.login)));
-  const filtered = useMemo(() => visibleRows.filter(s => (!search.trim() || `${s.displayName ?? ''} ${s.login}`.toLowerCase().includes(search.trim().toLowerCase())) && (status === 'ALL' || s.paceStatus === status) && (month === 'ALL' || String(s.curriculumMonth) === month)), [visibleRows, search, status, month]);
-  // North Star KPI: GREEN / measurable students. Live: from the server (policy-driven). Demo: same formula on mock data.
-  const onTrackKpis = useOnTrackKpis({ live: usingLiveApi, rows: learnerRows, mentors: mentorAccounts, refreshKey: `${retry}|${data?.syncedAt ?? ''}|${rows.map(row => `${row.studentId}:${row.mentorId ?? 0}`).join(',')}` });
-  const headlineKpi = isManager ? onTrackKpis.program : onTrackKpis.mentors[session.id];
-  const headline = describeOnTrack(onTrackKpis, headlineKpi);
-  const shownCount = (value?: number) => onTrackKpis.status === 'ready' ? value ?? 0 : '—';
-  const needsAttention = visibleRows.filter(s => s.paceStatus === 'YELLOW' || s.paceStatus === 'RED');
-  const ownStudent = session.role === 'student' ? rows.find(row => normalizeLogin(row.login) === studentLogin) : undefined;
-  // Notifications reuse the underlying follow-up and pace records.
-  const notificationItems = session.role === 'student'
-    ? interventions.filter(item => item.studentId === ownStudent?.studentId).map(item => ({ id: `follow-up:${item.id}`, title: item.authorName || 'Your mentor', detail: item.note, meta: 'New follow-up' }))
-    : needsAttention.map(student => ({ id: `pace:${student.studentId}:${student.paceStatus}`, title: student.displayName || student.login, detail: `${statusNames[lang][student.paceStatus]} · ${student.login}`, meta: 'Student check-in' }));
-  const unreadNotificationCount = notificationItems.filter(item => !completedNotifications.includes(item.id)).length;
-  const todayLabel = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(today);
-  const toggleNotification = (id: string) => setCompletedNotifications(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
-  const markAllNotificationsRead = () => setCompletedNotifications(current => [...new Set([...current, ...notificationItems.map(item => item.id)])]);
-  const openNotification = (id: string) => {
-    setNotificationsOpen(false);
-    if (session.role === 'student') {
-      setSection('overview');
-      const interventionId = id.slice('follow-up:'.length);
-      window.setTimeout(() => document.querySelector(`[data-intervention-id="${interventionId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80);
+  const localMentorAccounts = [
+    demoMentor,
+    ...accounts.filter(
+      (account) => account.role === "mentor" && account.id !== "demo-mentor",
+    ),
+  ].map((mentor) => ({
+    ...mentor,
+    assignedStudentLogins: [
+      ...new Set([
+        ...(mentor.assignedStudentLogins ?? []),
+        ...(session.role === "mentor" && session.id === mentor.id
+          ? (session.assignedStudentLogins ?? [])
+          : []),
+        ...accounts
+          .filter(
+            (account) =>
+              account.role === "student" &&
+              account.mentorId === mentor.id &&
+              account.studentLogin,
+          )
+          .map((account) => account.studentLogin!),
+      ]),
+    ],
+  }));
+  const toStaffAccount = (member: StaffMember): PulseAccount => {
+    const assignedStudentLogins = rows
+      .filter((student) => student.mentorId === member.studentId)
+      .map((student) => student.login);
+    return {
+      id: `01edu-${member.pulseRole}-${member.studentId}`,
+      name: member.displayName || member.login,
+      email: member.email,
+      role: member.pulseRole,
+      permissions: defaultPermissions[member.pulseRole],
+      studentLogin: member.login,
+      assignedStudentLogins,
+      capacityLimit: Math.max(20, assignedStudentLogins.length),
+    };
+  };
+  const liveManagers = (staff?.managers ?? []).map(toStaffAccount);
+  const liveMentors = (staff?.mentors ?? []).map(toStaffAccount);
+  const useLiveStaff =
+    usingLiveApi && (liveManagers.length > 0 || liveMentors.length > 0);
+  const mentorAccounts = useLiveStaff ? liveMentors : localMentorAccounts;
+  const programManagerAccount: PulseAccount =
+    (useLiveStaff ? liveManagers[0] : undefined) ??
+    accounts.find((account) => account.role === "manager") ??
+    (session.role === "manager"
+      ? session
+      : {
+          id: "demo-manager",
+          name: "Program Manager",
+          email: "manager@nextera.io",
+          role: "manager",
+          permissions: [],
+        });
+  const myAssignedLogins = new Set(
+    session.role === "mentor"
+      ? [
+          ...(useLiveStaff
+            ? (mentorAccounts.find((mentor) => mentor.id === session.id)
+                ?.assignedStudentLogins ?? [])
+            : session.assignedStudentLogins ??
+            (session.id === "demo-mentor"
+              ? rows.map((student) => student.login)
+              : [])),
+          ...accounts
+            .filter(
+              (account) =>
+                account.role === "student" && account.mentorId === session.id,
+            )
+            .map((account) => account.studentLogin ?? ""),
+        ].map(normalizeLogin)
+      : [],
+  );
+  const assignedRows = rows.filter((student) =>
+    myAssignedLogins.has(normalizeLogin(student.login)),
+  );
+  const studentLogin =
+    session.role === "student"
+      ? normalizeLogin(session.studentLogin || session.email.split("@")[0])
+      : "";
+  // Keep roster access separate from read-only cohort analytics. Mentor roster
+  // access stays limited to assigned students even when broader views are open.
+  const staffLogins = new Set(
+    [...(staff?.mentors ?? []), ...(staff?.managers ?? [])].map((member) =>
+      normalizeLogin(member.login),
+    ),
+  );
+  const learnerRows = useLiveStaff
+    ? rows.filter((student) => !staffLogins.has(normalizeLogin(student.login)))
+    : rows;
+  const onTrackKpis = useOnTrackKpis({
+    live: usingLiveApi,
+    rows: learnerRows,
+    mentors: mentorAccounts,
+    refreshKey: `${retry}|${data?.syncedAt ?? ""}|${learnerRows
+      .map((row) => `${row.studentId}:${row.mentorId ?? 0}`)
+      .join(",")}`,
+  });
+  const staffSeesAll = usingLiveApi && session.role !== "student";
+  const visibleRows = visibleStudentsForRole(
+    session.role,
+    learnerRows,
+    session.role === "mentor"
+      ? staffSeesAll
+        ? learnerRows.map((student) => student.login)
+        : [...myAssignedLogins]
+      : [],
+    studentLogin,
+  );
+  const visibleInterventionRows = isManager || staffSeesAll
+    ? learnerRows
+    : session.role === "mentor"
+      ? assignedRows
+      : [];
+  const selectedInterventionStudent = visibleInterventionRows.find(
+    (student) => String(student.studentId) === interventionStudent,
+  );
+  const visibleInterventions = interventions.filter((item) =>
+    visibleInterventionRows.some(
+      (student) => student.studentId === item.studentId,
+    ),
+  );
+  const canDeleteFollowUp = (item: Intervention) =>
+    usingLiveApi
+      ? item.canDelete === true
+      : isManager || item.authorId === session.id;
+  const removeFollowUp = async (item: Intervention) => {
+    if (usingLiveApi) {
+      try {
+        await deleteFollowUp(item.id);
+        setInterventions((current) =>
+          current.filter((entry) => entry.id !== item.id),
+        );
+        setMessage(t.removed);
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Could not delete the follow-up.",
+        );
+      }
       return;
     }
-    const student = notificationItems.find(item => item.id === id);
-    const studentId = student ? Number(id.split(':')[1]) : NaN;
-    const row = rows.find(item => item.studentId === studentId);
+    setInterventions((current) =>
+      current.filter((entry) => entry.id !== item.id),
+    );
+    setMessage(t.removed);
+  };
+  const accountRows = isManager
+    ? [
+        ...mentorAccounts,
+        ...accounts.filter((account) => account.role === "student"),
+      ]
+    : [
+        ...mentorAccounts,
+        ...accounts.filter(
+          (account) =>
+            account.role === "student" &&
+            (account.mentorId === session.id ||
+              myAssignedLogins.has(normalizeLogin(account.studentLogin))),
+        ),
+      ];
+  const linkedStudentLogins = new Set(
+    accountRows
+      .filter((account) => account.role === "student" && account.studentLogin)
+      .map((account) => normalizeLogin(account.studentLogin!)),
+  );
+  const accountScopeRows = isManager ? learnerRows : assignedRows;
+  const unlinkedStudentRecords = accountScopeRows.filter(
+    (student) => !linkedStudentLogins.has(normalizeLogin(student.login)),
+  );
+  const filtered = useMemo(
+    () =>
+      visibleRows.filter(
+        (s) =>
+          (!search.trim() ||
+            `${s.displayName ?? ""} ${s.login}`
+              .toLowerCase()
+              .includes(search.trim().toLowerCase())) &&
+          (status === "ALL" || s.paceStatus === status) &&
+          (month === "ALL" || String(s.curriculumMonth) === month) &&
+          (sourceStatus === "ALL" || String(s.sourceStatus) === sourceStatus),
+      ),
+    [visibleRows, search, status, month, sourceStatus],
+  );
+  const studentPageCount = Math.max(1, Math.ceil(filtered.length / 25));
+  const pageRows = filtered.slice((studentPage - 1) * 25, studentPage * 25);
+  useEffect(() => { setStudentPage(1); }, [search, status, month, sourceStatus]);
+  const activeKpiRows = visibleRows.filter(isInActiveKpiPopulation);
+  const count = (keys: PaceStatus[]) =>
+    activeKpiRows.filter((s) => keys.includes(s.paceStatus)).length;
+  const needsAttention = activeKpiRows.filter(
+    (s) => s.paceStatus === "YELLOW" || s.paceStatus === "RED",
+  );
+  const ownStudent =
+    session.role === "student"
+      ? rows.find((row) => normalizeLogin(row.login) === studentLogin)
+      : undefined;
+  // Notifications reuse the underlying follow-up and pace records.
+  const standardNotificationItems =
+    session.role === "student"
+      ? interventions
+          .filter((item) => item.studentId === ownStudent?.studentId)
+          .map((item) => ({
+            id: `follow-up:${item.id}`,
+            title: item.authorName || "Your mentor",
+            detail: item.note,
+            meta: "New follow-up",
+          }))
+      : needsAttention.map((student) => ({
+          id: `pace:${student.studentId}:${student.paceStatus}`,
+          title: student.displayName || student.login,
+          detail: `${statusNames[lang][student.paceStatus]} · ${student.login}`,
+          meta: "Student check-in",
+        }));
+  const notificationItems = standardNotificationItems;
+  const unreadNotificationCount = notificationItems.filter(
+    (item) => !completedNotifications.includes(item.id),
+  ).length;
+  const todayLabel = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(today);
+  const toggleNotification = (id: string) =>
+    setCompletedNotifications((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
+  const markAllNotificationsRead = () =>
+    setCompletedNotifications((current) => [
+      ...new Set([...current, ...notificationItems.map((item) => item.id)]),
+    ]);
+  const openNotification = (id: string) => {
+    setNotificationsOpen(false);
+    if (session.role === "student") {
+      setSection("overview");
+      const interventionId = id.slice("follow-up:".length);
+      window.setTimeout(
+        () =>
+          document
+            .querySelector(`[data-intervention-id="${interventionId}"]`)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+        80,
+      );
+      return;
+    }
+    const student = notificationItems.find((item) => item.id === id);
+    const studentId = student ? Number(id.split(":")[1]) : NaN;
+    const row = rows.find((item) => item.studentId === studentId);
     if (row) {
-      setHelpOpen(false);
       setStudentFormOpen(false);
       setEditingStudent(null);
       openStudentIntervention(row);
     }
   };
-  const nav = (next: Section) => { setSection(next); if (next === 'profile') { setProfileAccountId(session.id); setProfileStudent(null); setReadOnlyProfile(false); } if (next !== 'team') setViewedMentorId(null); setNotificationsOpen(false); setHelpOpen(false); };
-  const openMentorWorkspace = (mentor: PulseAccount) => { setViewedMentorId(mentor.id); setSection('team'); setNotificationsOpen(false); setHelpOpen(false); };
-  const beginActingAsMentor = (mentor: PulseAccount) => { const { passwordHash: _passwordHash, ...mentorSession } = mentor; setActingAsMentor(mentorSession); setViewedMentorId(null); setProfileAccountId(mentor.id); setSelectedStudent(null); setProfileStudent(null); setNotificationsOpen(false); setHelpOpen(false); setSection('overview'); setMessage(rtl ? `أنت تعمل الآن بصلاحيات ${mentor.name}.` : `You are now acting with ${mentor.name}'s permissions.`); };
-  const stopActingAsMentor = () => { setActingAsMentor(null); setViewedMentorId(null); setSelectedStudent(null); setSection('overview'); };
-  const openAccountProfile = (account: PulseAccount) => { setMemberProfileReturnSection(section); setProfileStudent(null); setReadOnlyProfile(false); setProfileAccountId(account.id); setSection(account.id === session.id ? 'profile' : 'member-profile'); setNotificationsOpen(false); setHelpOpen(false); };
-  const openStudentIntervention = (student: StudentPaceRow) => { setInterventionStudent(String(student.studentId)); setInterventionNote(''); setShowInterventionForm(true); setSelectedStudent(null); nav('interventions'); };
-  const openStudentProfile = (student: StudentPaceRow) => { const account = accounts.find(item => item.role === 'student' && normalizeLogin(item.studentLogin ?? '') === normalizeLogin(student.login)); setMemberProfileReturnSection(section); setProfileStudent(student); setReadOnlyProfile(false); setProfileAccountId(account?.id ?? `student-record-${student.studentId}`); setSelectedStudent(null); setSection(account?.id === session.id ? 'profile' : 'member-profile'); setNotificationsOpen(false); };
-  const openHierarchyAccount = (account: PulseAccount) => { setMemberProfileReturnSection('hierarchy'); setProfileStudent(null); setReadOnlyProfile(account.id !== session.id); setProfileAccountId(account.id); setSection(account.id === session.id ? 'profile' : 'member-profile'); setNotificationsOpen(false); setHelpOpen(false); setViewedMentorId(null); };
-  const openHierarchyStudent = (student: StudentPaceRow, account: PulseAccount) => { setMemberProfileReturnSection('hierarchy'); setProfileStudent(student); setReadOnlyProfile(account.id !== session.id); setProfileAccountId(account.id); setSection(account.id === session.id ? 'profile' : 'member-profile'); setNotificationsOpen(false); setHelpOpen(false); setViewedMentorId(null); };
-  const openInterventionAuthor = (account: PulseAccount) => { openAccountProfile(account); setSelectedStudent(null); };
-  const saveIntervention = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!interventionStudent || !interventionNote.trim()) return; const note = interventionNote.trim(); const studentId = Number(interventionStudent); if (usingLiveApi) { createFollowUp({ studentId, note }).then(entry => { setInterventions(current => [{ ...entry, authorName: session.name, authorRole: session.role, canDelete: true }, ...current.filter(item => item.id !== entry.id)]); setInterventionNote(''); setInterventionStudent(''); setShowInterventionForm(false); setMessage(rtl ? 'تم حفظ المتابعة في الـAPI.' : 'Follow-up saved to the API.'); }).catch(e => setMessage(e instanceof Error ? e.message : 'Could not save follow-up.')); return; } const entry: Intervention = { id: Date.now(), studentId, note, createdAt: new Date().toISOString(), authorId: session.id, authorName: session.name, authorRole: session.role, ...(actingAsMentor ? { performedById: signedInSession.id, performedByName: signedInSession.name } : {}) }; const { passwordHash: _passwordHash, ...authorProfile } = session as PulseAccount; setAccounts(current => [...current.filter(account => account.id !== session.id), { ...(current.find(account => account.id === session.id) ?? authorProfile), ...authorProfile }]); setInterventions(current => [entry, ...current]); setInterventionNote(''); setInterventionStudent(''); setShowInterventionForm(false); setMessage(t.saved); };
-  const saveStudent = (student: StudentPaceRow) => { const previous = rows.find(row => row.studentId === student.studentId); const isNew = !previous; if (session.role === 'mentor' && isNew && session.capacityLimit !== undefined && assignedRows.length >= session.capacityLimit) { setMessage(rtl ? 'وصلت لسعتك. اطلب من المدير زيادة الحد.' : 'You reached your capacity. Ask the Program Manager to increase it.'); return ;} const nextStudent = { ...student, displayName: student.displayName || student.login }; setManagedStudents(current => [...current.filter(row => row.studentId !== student.studentId), nextStudent]); const linked = previous && accounts.find(account => account.role === 'student' && normalizeLogin(account.studentLogin) === normalizeLogin(previous.login)); if (linked) { const updatedAccount = { ...linked, name: nextStudent.displayName, studentLogin: nextStudent.login }; setAccounts(current => { let next = current.map(account => account.id === linked.id ? updatedAccount : account); if (normalizeLogin(previous.login) !== normalizeLogin(nextStudent.login) && linked.mentorId) { const mentors = [demoMentor, ...next.filter(account => account.role === 'mentor' && account.id !== 'demo-mentor')]; let synced = assignStudentToMentor(mentors, linked.mentorId, previous.login, false); synced = assignStudentToMentor(synced, linked.mentorId, nextStudent.login, true); next = [...next.filter(account => !synced.some(mentor => mentor.id === account.id)), ...synced] ;} return next ;}) ;} if (session.role === 'mentor' && isNew) { const nextSession = { ...session, assignedStudentLogins: [...new Set([...(session.assignedStudentLogins ?? []), nextStudent.login])] }; setAccounts(current => [...current.filter(account => account.id !== session.id), { ...(current.find(account => account.id === session.id) ?? session), ...nextSession }]); updateActiveSession(nextSession) ;} setStudentFormOpen(false); setEditingStudent(null); setMessage(rtl ? 'تم حفظ بيانات الطالب وربطها بالحساب.' : 'Student record and linked account saved.'); };
-  const linkedProfileAccount = profileStudent && accounts.find(item => item.role === 'student' && normalizeLogin(item.studentLogin ?? '') === normalizeLogin(profileStudent.login));
-  const viewedProfile = profileStudent ? (linkedProfileAccount ?? { id: `student-record-${profileStudent.studentId}`, name: profileStudent.displayName || profileStudent.login, email: '', role: 'student' as const, permissions: [], studentLogin: profileStudent.login }) : profileAccountId === session.id ? session : (accounts.find(account => account.id === profileAccountId) ?? (profileAccountId === programManagerAccount.id ? programManagerAccount : session));
-  const viewedStudentRecord = viewedProfile.role === 'student' ? profileStudent ?? rows.find(row => normalizeLogin(row.login) === normalizeLogin(viewedProfile.studentLogin ?? viewedProfile.email.split('@')[0])) : undefined;
-  const syntheticStudentProfile = Boolean(profileStudent && !linkedProfileAccount);
-  const updateAccount = (account: PulseAccount, password?: string): boolean => { const previous = accounts.find(item => item.id === account.id); const updated = { ...account }; if (password === undefined && !updated.passwordHash) updated.passwordHash = previous?.passwordHash; if (updated.role === 'student') { updated.studentLogin = updated.studentLogin?.trim(); if (session.role === 'mentor') updated.mentorId = session.id; const oldLogin = previous?.studentLogin; const oldRow = oldLogin ? rows.find(row => normalizeLogin(row.login) === normalizeLogin(oldLogin)) : undefined; const newRow = updated.studentLogin ? rows.find(row => normalizeLogin(row.login) === normalizeLogin(updated.studentLogin)) : undefined; if (oldLogin && normalizeLogin(oldLogin) !== normalizeLogin(updated.studentLogin) && newRow && newRow.studentId !== oldRow?.studentId) { setMessage(rtl ? 'اسم الدخول مستخدم في سجل طالب آخر.' : 'That academy login already belongs to another student record.'); return false ;} if (updated.studentLogin) { const linkedRow = oldRow ?? newRow; if (linkedRow) { const synced = syncStudentIdentity(linkedRow, { login: updated.studentLogin, displayName: updated.name }); setManagedStudents(current => [...current.filter(row => row.studentId !== synced.studentId), synced]) ;} else { const studentId = Math.max(Date.now(), ...rows.map(row => row.studentId + 1)); const newRecord = createDemoStudentRecord({ studentId, login: updated.studentLogin, displayName: updated.name }); setManagedStudents(current => [...current.filter(row => row.studentId !== studentId), newRecord]) ;} } } if (updated.role === 'mentor') { updated.capacityLimit = updated.capacityLimit ?? Math.max(20, rows.length); updated.assignedStudentLogins = updated.assignedStudentLogins ?? [] ;} let nextSession: PulseSession | undefined; if (account.id === session.id) { const { passwordHash: _passwordHash, ...selfSession } = updated; nextSession = { ...selfSession, permissions: selfSession.permissions.filter(permission => String(permission) !== 'community') } ;} setAccounts(current => { let next = [...current.filter(item => item.id !== updated.id), updated]; if (updated.role === 'student' && updated.studentLogin && updated.mentorId) { const mentors = [demoMentor, ...next.filter(item => item.role === 'mentor' && item.id !== 'demo-mentor')]; let synced = mentors; if (previous?.mentorId && previous.mentorId !== updated.mentorId) synced = assignStudentToMentor(synced, previous.mentorId, previous.studentLogin ?? updated.studentLogin!, false); if (previous?.studentLogin && normalizeLogin(previous.studentLogin) !== normalizeLogin(updated.studentLogin)) synced = assignStudentToMentor(synced, updated.mentorId, previous.studentLogin, false); synced = assignStudentToMentor(synced, updated.mentorId, updated.studentLogin!, true); next = [...next.filter(item => !synced.some(mentor => mentor.id === item.id)), ...synced] ;} return next ;}); if (nextSession) updateActiveSession(nextSession); return true ;};
-  const updateMentor = (mentor: PulseAccount) => setAccounts(current => [...current.filter(item => item.id !== mentor.id), mentor]);
-  const assignStudent = (mentorId: string, login: string, assigned: boolean) => { if (usingLiveApi) {
-    // Live mode: the server owns assignments (and keeps their history). Show the
-    // change at once, put the old mentor back and say why if the server refuses.
-    const student = rows.find(row => normalizeLogin(row.login) === normalizeLogin(login));
-    if (!student) return;
-    const name = student.displayName || student.login;
-    const setMentor = (nextId: number | undefined, nextName: string | undefined) => setData(current => current ? { ...current, students: current.students.map(row => row.studentId === student.studentId ? { ...row, mentorId: nextId, mentorName: nextName } : row) } : current);
-    const restore = (error: unknown) => { setMentor(student.mentorId, student.mentorName); const reason = error instanceof Error && error.message !== 'UNAUTHENTICATED' ? error.message : ''; showError(rtl ? `تعذر تغيير منتور ${name}. ${reason}` : `Could not change ${name}'s mentor. ${reason}`.trim()); };
-    if (assigned) {
-      const mentorStudentId = Number(mentorId.split('-').pop());
-      const mentor = mentorAccounts.find(item => item.id === mentorId);
-      if (!mentorStudentId) return;
-      setMentor(mentorStudentId, mentor?.name ?? student.mentorName);
-      assignMentor(student.studentId, mentorStudentId).then(() => { setMessage(rtl ? `تم إسناد ${name} إلى ${mentor?.name ?? ''}.` : `${name} is now with ${mentor?.name ?? 'the new mentor'}.`); }).catch(restore);
-    } else {
-      setMentor(undefined, undefined);
-      unassignMentor(student.studentId).then(() => { setMessage(rtl ? `تم إلغاء إسناد ${name}.` : `${name} no longer has a mentor.`); }).catch(restore);
+  const nav = (next: Section) => {
+    setSection(next);
+    if (next !== "team") setViewedMentorId(null);
+    setNotificationsOpen(false);
+  };
+  const openMentorWorkspace = (mentor: PulseAccount) => {
+    setViewedMentorId(mentor.id);
+    setSection("team");
+    setNotificationsOpen(false);
+  };
+  const beginActingAsMentor = (mentor: PulseAccount) => {
+    const { passwordHash: _passwordHash, ...mentorSession } = mentor;
+    setActingAsMentor(mentorSession);
+    setViewedMentorId(null);
+    setProfileAccountId(mentor.id);
+    setSelectedStudent(null);
+    setProfileStudent(null);
+    setNotificationsOpen(false);
+    setSection("overview");
+    setMessage(
+      rtl
+        ? `أنت تعمل الآن بصلاحيات ${mentor.name}.`
+        : `You are now acting with ${mentor.name}'s permissions.`,
+    );
+  };
+  const stopActingAsMentor = () => {
+    setActingAsMentor(null);
+    setViewedMentorId(null);
+    setSelectedStudent(null);
+    setSection("overview");
+  };
+  const openAccountProfile = (account: PulseAccount) => {
+    setMemberProfileReturnSection(section === "member-profile" ? "students" : section);
+    setProfileStudent(null);
+    setReadOnlyProfile(false);
+    setProfileAccountId(account.id);
+    setSection("member-profile");
+    setNotificationsOpen(false);
+  };
+  const openStudentIntervention = (student: StudentPaceRow) => {
+    setInterventionStudent(String(student.studentId));
+    setInterventionNote("");
+    setShowInterventionForm(true);
+    setSelectedStudent(null);
+    nav("interventions");
+  };
+  const openStudentProfile = (student: StudentPaceRow) => {
+    const account = accounts.find(
+      (item) =>
+        item.role === "student" &&
+        normalizeLogin(item.studentLogin ?? "") ===
+          normalizeLogin(student.login),
+    );
+    setMemberProfileReturnSection(section);
+    setProfileStudent(student);
+    setReadOnlyProfile(false);
+    setProfileAccountId(account?.id ?? `student-record-${student.studentId}`);
+    setSelectedStudent(null);
+    setSection("member-profile");
+    setNotificationsOpen(false);
+  };
+  const openInterventionAuthor = (account: PulseAccount) => {
+    openAccountProfile(account);
+    setSelectedStudent(null);
+  };
+  const explainReadOnlyApi = () =>
+    setMessage(
+      "No change was made: the configured backend currently supports read-only student data.",
+    );
+  const saveIntervention = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (usingLiveApi) {
+      if (!interventionStudent || !interventionNote.trim()) return;
+      try {
+        const saved = await createFollowUp({
+          studentId: Number(interventionStudent),
+          note: interventionNote.trim(),
+        });
+        setInterventions((current) => [saved, ...current]);
+        setInterventionNote("");
+        setInterventionStudent("");
+        setShowInterventionForm(false);
+        setMessage(rtl ? "تم حفظ المتابعة في الـAPI." : "Follow-up saved to the API.");
+      } catch (error) {
+        setMessage(
+          error instanceof Error ? error.message : "Could not save follow-up.",
+        );
+      }
+      return;
     }
-    return;
-  } setAccounts(current => { const mentors = [demoMentor, ...current.filter(item => item.role === 'mentor' && item.id !== 'demo-mentor')]; const updatedMentors = assignStudentToMentor(mentors, mentorId, login, assigned); let next = [...current.filter(item => !updatedMentors.some(mentor => mentor.id === item.id)), ...updatedMentors]; const studentAccount = next.find(item => item.role === 'student' && normalizeLogin(item.studentLogin) === normalizeLogin(login)); if (studentAccount) next = next.map(item => item.id === studentAccount.id ? { ...item, mentorId: assigned ? mentorId : (item.mentorId === mentorId ? undefined : item.mentorId) } : item); return next ;}) ;};
-  const removeStudentRecord = (student: StudentPaceRow) => { setDeletedStudentIds(current => [...new Set([...current, student.studentId])]); setManagedStudents(current => current.filter(item => item.studentId !== student.studentId)); const linked = accounts.find(account => account.role === 'student' && normalizeLogin(account.studentLogin) === normalizeLogin(student.login)); setAccounts(current => { let next = linked ? current.filter(item => item.id !== linked.id) : current; const mentors = [demoMentor, ...next.filter(item => item.role === 'mentor' && item.id !== 'demo-mentor')]; const assigned = mentors.filter(mentor => (mentor.assignedStudentLogins ?? []).some(login => normalizeLogin(login) === normalizeLogin(student.login))); let synced = mentors; for (const mentor of assigned) synced = assignStudentToMentor(synced, mentor.id, student.login, false); return [...next.filter(item => !synced.some(mentor => mentor.id === item.id)), ...synced] ;}) ;};
-  const removeAccount = (account: PulseAccount) => { if (account.role === 'mentor') { const assigned = accounts.some(item => item.role === 'student' && (item.mentorId === account.id || (item.studentLogin && account.assignedStudentLogins?.some(login => normalizeLogin(login) === normalizeLogin(item.studentLogin))))); if (assigned || (account.assignedStudentLogins?.length ?? 0) > 0) { setMessage(rtl ? 'أعد إسناد طلاب المنتور قبل حذف حسابه.' : 'Reassign this mentor’s students before deleting the account.'); return ;} } if (account.role === 'student' && account.studentLogin) { const row = rows.find(item => normalizeLogin(item.login) === normalizeLogin(account.studentLogin)); if (row) { setDeletedStudentIds(current => [...new Set([...current, row.studentId])]); setManagedStudents(current => current.filter(item => item.studentId !== row.studentId)) ;} } setAccounts(current => { let next = current.filter(item => item.id !== account.id); if (account.role === 'student' && account.studentLogin) { const mentors = [demoMentor, ...next.filter(item => item.role === 'mentor' && item.id !== 'demo-mentor')]; let synced = mentors; for (const mentor of mentors) if ((mentor.assignedStudentLogins ?? []).some(login => normalizeLogin(login) === normalizeLogin(account.studentLogin))) synced = assignStudentToMentor(synced, mentor.id, account.studentLogin, false); next = [...next.filter(item => !synced.some(mentor => mentor.id === item.id)), ...synced] ;} return next ;}) ;};
-  const saveProfile = (account: PulseAccount): boolean => { try { const next = persistProfileAccount(localStorage, account); setAccounts(next); if (account.role === 'student' && account.studentLogin) { const row = rows.find(item => normalizeLogin(item.login) === normalizeLogin(account.studentLogin)); if (row) { const synced = syncStudentIdentity(row, { login: account.studentLogin, displayName: account.name }); setManagedStudents(current => [...current.filter(item => item.studentId !== synced.studentId), synced]) ;} } if (account.id === session.id) { const { passwordHash: _passwordHash, ...nextSession } = account as PulseAccount; updateActiveSession(nextSession) ;} return true ;} catch { setMessage(rtl ? 'تعذر حفظ الملف الشخصي. مساحة التخزين قد تكون ممتلئة.' : 'Could not save the profile. Browser storage may be full.'); return false ;} };
-  const studentOverview = session.role === 'student' && section === 'overview';
-  const viewedMentor = viewedMentorId ? mentorAccounts.find(account => account.id === viewedMentorId) : undefined;
-  const pageTitle = studentOverview ? (rtl ? 'تقدمي الدراسي' : 'My learning pulse') : section === 'settings' ? t.settingsTitle : section === 'overview' ? t.overviewTitle : section === 'team' && viewedMentor ? viewedMentor.name : section === 'member-profile' ? viewedProfile.name : section === 'profile' ? t.profile : t[section];
-  const memberProfileReturnLabel = memberProfileReturnSection === 'member-profile' ? t.hierarchy : t[memberProfileReturnSection];
-  const pageSubtitle = studentOverview ? (rtl ? 'تابع مستواك ونشاطك ومتابعات فريقك من مكان واحد.' : 'Track your level, activity, and team follow-ups in one place.') : section === 'hierarchy' ? (rtl ? 'خريطة تفاعلية لعلاقات الفريق والطلاب.' : 'An interactive map of team and student relationships.') : section === 'member-profile' ? (rtl ? 'عرض تفاصيل الملف الشخصي.' : `${viewedProfile.role === 'manager' ? 'Program manager' : viewedProfile.role === 'mentor' ? 'Mentor' : 'Student'} profile · Back to ${memberProfileReturnLabel}.`) : section === 'team' && viewedMentor ? (rtl ? 'راجع مساحة المنتور وابدأ العمل بصلاحياته.' : 'Review this mentor’s workspace or start acting with their permissions.') : section === 'settings' ? t.settingsSubtitle : t.subtitle;
-  const pageEyebrow = section === 'member-profile'
-    ? (viewedProfile.role === 'manager' ? (rtl ? 'مدير البرنامج' : 'PROGRAM MANAGER PROFILE') : viewedProfile.role === 'mentor' ? (rtl ? 'ملف المنتور' : 'MENTOR PROFILE') : (rtl ? 'ملف الطالب' : 'STUDENT PROFILE'))
-    : section === 'overview' ? (isManager ? (rtl ? 'مدير البرنامج' : 'PROGRAM MANAGER') : session.role === 'student' ? (rtl ? 'مساحة الطالب' : 'STUDENT WORKSPACE') : t.welcome)
-      : isManager ? (rtl ? 'إدارة البرنامج' : 'PROGRAM MANAGER') : session.role === 'mentor' ? t.mentor : (rtl ? 'مساحة الطالب' : 'STUDENT WORKSPACE');
-  const can = (key: AccessKey) => isManager || session.permissions.includes(key);
-  const sidebarCohortName = (data?.cohortName ?? 'Coding Cohort').replace(/\d+/g, '').replace(/\s{2,}/g, ' ').trim();
-  const overviewSidebarItems = session.role === 'student'
-    ? [{ id: 'progress', icon: '↗', label: rtl ? 'تقدمي' : 'My progress' }, { id: 'cohort', icon: '⌁', label: rtl ? 'مقارنة الكوهورت' : 'Cohort comparison' }, { id: 'projects', icon: '◫', label: rtl ? 'مشاريعي' : 'My projects' }, { id: 'followups', icon: '▤', label: rtl ? 'المتابعات' : 'Follow-ups' }]
-    : isManager || can('viewCohort')
-      ? [{ id: 'summary', icon: '▦', label: rtl ? 'ملخص الكوهورت' : 'Cohort snapshot' }, { id: 'learning', icon: '⌁', label: rtl ? 'تحليلات الطلاب' : 'Student analytics' }, { id: 'projects', icon: '◫', label: rtl ? 'المشاريع' : 'Projects' }]
-      : [];
+    if (apiReadOnly) {
+      explainReadOnlyApi();
+      return;
+    }
+    if (!interventionStudent || !interventionNote.trim()) return;
+    const entry: Intervention = {
+      id: Date.now(),
+      studentId: Number(interventionStudent),
+      note: interventionNote.trim(),
+      createdAt: new Date().toISOString(),
+      authorId: session.id,
+      authorName: session.name,
+      authorRole: session.role,
+      ...(actingAsMentor
+        ? {
+            performedById: signedInSession.id,
+            performedByName: signedInSession.name,
+          }
+        : {}),
+    };
+    const { passwordHash: _passwordHash, ...authorProfile } =
+      session as PulseAccount;
+    setAccounts((current) => [
+      ...current.filter((account) => account.id !== session.id),
+      {
+        ...(current.find((account) => account.id === session.id) ??
+          authorProfile),
+        ...authorProfile,
+      },
+    ]);
+    setInterventions((current) => [entry, ...current]);
+    setInterventionNote("");
+    setInterventionStudent("");
+    setShowInterventionForm(false);
+    setMessage(t.saved);
+  };
+  const saveStudent = (student: StudentPaceRow) => {
+    if (apiReadOnly) {
+      explainReadOnlyApi();
+      return;
+    }
+    const previous = rows.find((row) => row.studentId === student.studentId);
+    const isNew = !previous;
+    if (
+      session.role === "mentor" &&
+      isNew &&
+      session.capacityLimit !== undefined &&
+      assignedRows.length >= session.capacityLimit
+    ) {
+      setMessage(
+        rtl
+          ? "وصلت لسعتك. اطلب من المدير زيادة الحد."
+          : "You reached your capacity. Ask the Program Manager to increase it.",
+      );
+      return;
+    }
+    const nextStudent = {
+      ...student,
+      displayName: student.displayName || student.login,
+    };
+    setManagedStudents((current) => [
+      ...current.filter((row) => row.studentId !== student.studentId),
+      nextStudent,
+    ]);
+    const linked =
+      previous &&
+      accounts.find(
+        (account) =>
+          account.role === "student" &&
+          normalizeLogin(account.studentLogin) ===
+            normalizeLogin(previous.login),
+      );
+    if (linked) {
+      const updatedAccount = {
+        ...linked,
+        name: nextStudent.displayName,
+        studentLogin: nextStudent.login,
+      };
+      setAccounts((current) => {
+        let next = current.map((account) =>
+          account.id === linked.id ? updatedAccount : account,
+        );
+        if (
+          normalizeLogin(previous.login) !==
+            normalizeLogin(nextStudent.login) &&
+          linked.mentorId
+        ) {
+          const mentors = [
+            demoMentor,
+            ...next.filter(
+              (account) =>
+                account.role === "mentor" && account.id !== "demo-mentor",
+            ),
+          ];
+          let synced = assignStudentToMentor(
+            mentors,
+            linked.mentorId,
+            previous.login,
+            false,
+          );
+          synced = assignStudentToMentor(
+            synced,
+            linked.mentorId,
+            nextStudent.login,
+            true,
+          );
+          next = [
+            ...next.filter(
+              (account) => !synced.some((mentor) => mentor.id === account.id),
+            ),
+            ...synced,
+          ];
+        }
+        return next;
+      });
+    }
+    if (session.role === "mentor" && isNew) {
+      const nextSession = {
+        ...session,
+        assignedStudentLogins: [
+          ...new Set([
+            ...(session.assignedStudentLogins ?? []),
+            nextStudent.login,
+          ]),
+        ],
+      };
+      setAccounts((current) => [
+        ...current.filter((account) => account.id !== session.id),
+        {
+          ...(current.find((account) => account.id === session.id) ?? session),
+          ...nextSession,
+        },
+      ]);
+      updateActiveSession(nextSession);
+    }
+    setStudentFormOpen(false);
+    setEditingStudent(null);
+    setMessage(
+      rtl
+        ? "تم حفظ بيانات الطالب وربطها بالحساب."
+        : "Student record and linked account saved.",
+    );
+  };
+  const linkedProfileAccount =
+    profileStudent &&
+    accounts.find(
+      (item) =>
+        item.role === "student" &&
+        normalizeLogin(item.studentLogin ?? "") ===
+          normalizeLogin(profileStudent.login),
+    );
+  const viewedProfile = profileStudent
+    ? (linkedProfileAccount ?? {
+        id: `student-record-${profileStudent.studentId}`,
+        name: profileStudent.displayName || profileStudent.login,
+        email: "",
+        role: "student" as const,
+        permissions: [],
+        studentLogin: profileStudent.login,
+      })
+    : profileAccountId === session.id
+      ? session
+      : (accounts.find((account) => account.id === profileAccountId) ??
+        (profileAccountId === programManagerAccount.id
+          ? programManagerAccount
+          : session));
+  const viewedStudentRecord =
+    viewedProfile.role === "student"
+      ? (profileStudent ??
+        rows.find(
+          (row) =>
+            normalizeLogin(row.login) ===
+            normalizeLogin(
+              viewedProfile.studentLogin ?? viewedProfile.email.split("@")[0],
+            ),
+        ))
+      : undefined;
+  const syntheticStudentProfile = Boolean(
+    profileStudent && !linkedProfileAccount,
+  );
+  const updateAccount = (account: PulseAccount, password?: string): boolean => {
+    if (apiReadOnly) {
+      explainReadOnlyApi();
+      return false;
+    }
+    const previous = accounts.find((item) => item.id === account.id);
+    const updated = { ...account };
+    if (password === undefined && !updated.passwordHash)
+      updated.passwordHash = previous?.passwordHash;
+    if (updated.role === "student") {
+      updated.studentLogin = updated.studentLogin?.trim();
+      if (session.role === "mentor") updated.mentorId = session.id;
+      const oldLogin = previous?.studentLogin;
+      const oldRow = oldLogin
+        ? rows.find(
+            (row) => normalizeLogin(row.login) === normalizeLogin(oldLogin),
+          )
+        : undefined;
+      const newRow = updated.studentLogin
+        ? rows.find(
+            (row) =>
+              normalizeLogin(row.login) ===
+              normalizeLogin(updated.studentLogin),
+          )
+        : undefined;
+      if (
+        oldLogin &&
+        normalizeLogin(oldLogin) !== normalizeLogin(updated.studentLogin) &&
+        newRow &&
+        newRow.studentId !== oldRow?.studentId
+      ) {
+        setMessage(
+          rtl
+            ? "اسم الدخول مستخدم في سجل طالب آخر."
+            : "That academy login already belongs to another student record.",
+        );
+        return false;
+      }
+      if (updated.studentLogin) {
+        const linkedRow = oldRow ?? newRow;
+        if (linkedRow) {
+          const synced = syncStudentIdentity(linkedRow, {
+            login: updated.studentLogin,
+            displayName: updated.name,
+          });
+          setManagedStudents((current) => [
+            ...current.filter((row) => row.studentId !== synced.studentId),
+            synced,
+          ]);
+        } else {
+          const studentId = Math.max(
+            Date.now(),
+            ...rows.map((row) => row.studentId + 1),
+          );
+          const newRecord = createDemoStudentRecord({
+            studentId,
+            login: updated.studentLogin,
+            displayName: updated.name,
+          });
+          setManagedStudents((current) => [
+            ...current.filter((row) => row.studentId !== studentId),
+            newRecord,
+          ]);
+        }
+      }
+    }
+    if (updated.role === "mentor") {
+      updated.capacityLimit =
+        updated.capacityLimit ?? Math.max(20, rows.length);
+      updated.assignedStudentLogins = updated.assignedStudentLogins ?? [];
+    }
+    let nextSession: PulseSession | undefined;
+    if (account.id === session.id) {
+      const { passwordHash: _passwordHash, ...selfSession } = updated;
+      nextSession = {
+        ...selfSession,
+        permissions: selfSession.permissions.filter(
+          (permission) => String(permission) !== "community",
+        ),
+      };
+    }
+    setAccounts((current) => {
+      let next = [...current.filter((item) => item.id !== updated.id), updated];
+      if (
+        updated.role === "student" &&
+        updated.studentLogin &&
+        updated.mentorId
+      ) {
+        const mentors = [
+          demoMentor,
+          ...next.filter(
+            (item) => item.role === "mentor" && item.id !== "demo-mentor",
+          ),
+        ];
+        let synced = mentors;
+        if (previous?.mentorId && previous.mentorId !== updated.mentorId)
+          synced = assignStudentToMentor(
+            synced,
+            previous.mentorId,
+            previous.studentLogin ?? updated.studentLogin!,
+            false,
+          );
+        if (
+          previous?.studentLogin &&
+          normalizeLogin(previous.studentLogin) !==
+            normalizeLogin(updated.studentLogin)
+        )
+          synced = assignStudentToMentor(
+            synced,
+            updated.mentorId,
+            previous.studentLogin,
+            false,
+          );
+        synced = assignStudentToMentor(
+          synced,
+          updated.mentorId,
+          updated.studentLogin!,
+          true,
+        );
+        next = [
+          ...next.filter(
+            (item) => !synced.some((mentor) => mentor.id === item.id),
+          ),
+          ...synced,
+        ];
+      }
+      return next;
+    });
+    if (nextSession) updateActiveSession(nextSession);
+    return true;
+  };
+  const updateMentor = (mentor: PulseAccount) => {
+    if (apiReadOnly) {
+      explainReadOnlyApi();
+      return;
+    }
+    setAccounts((current) => [
+      ...current.filter((item) => item.id !== mentor.id),
+      mentor,
+    ]);
+  };
+  const assignStudent = async (
+    mentorId: string,
+    login: string,
+    assigned: boolean,
+  ) => {
+    if (usingLiveApi) {
+      const student = rows.find(
+        (row) => normalizeLogin(row.login) === normalizeLogin(login),
+      );
+      const liveMentorId = Number(mentorId.match(/-(\d+)$/)?.[1]);
+      if (!student || !Number.isInteger(liveMentorId)) return;
+      try {
+        if (assigned) await assignMentor(student.studentId, liveMentorId);
+        else await unassignMentor(student.studentId);
+        const refreshed = await getStudents();
+        setData(refreshed);
+        setMessage(rtl ? "تم تحديث توزيع المنتور." : "Mentor assignment updated.");
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Could not update the mentor assignment.",
+        );
+      }
+      return;
+    }
+    if (apiReadOnly) {
+      explainReadOnlyApi();
+      return;
+    }
+    setAccounts((current) => {
+      const mentors = [
+        demoMentor,
+        ...current.filter(
+          (item) => item.role === "mentor" && item.id !== "demo-mentor",
+        ),
+      ];
+      const updatedMentors = assignStudentToMentor(
+        mentors,
+        mentorId,
+        login,
+        assigned,
+      );
+      let next = [
+        ...current.filter(
+          (item) => !updatedMentors.some((mentor) => mentor.id === item.id),
+        ),
+        ...updatedMentors,
+      ];
+      const studentAccount = next.find(
+        (item) =>
+          item.role === "student" &&
+          normalizeLogin(item.studentLogin) === normalizeLogin(login),
+      );
+      if (studentAccount)
+        next = next.map((item) =>
+          item.id === studentAccount.id
+            ? {
+                ...item,
+                mentorId: assigned
+                  ? mentorId
+                  : item.mentorId === mentorId
+                    ? undefined
+                    : item.mentorId,
+              }
+            : item,
+        );
+      return next;
+    });
+  };
+  const removeStudentRecord = (student: StudentPaceRow) => {
+    if (apiReadOnly) {
+      explainReadOnlyApi();
+      return;
+    }
+    setDeletedStudentIds((current) => [
+      ...new Set([...current, student.studentId]),
+    ]);
+    setManagedStudents((current) =>
+      current.filter((item) => item.studentId !== student.studentId),
+    );
+    const linked = accounts.find(
+      (account) =>
+        account.role === "student" &&
+        normalizeLogin(account.studentLogin) === normalizeLogin(student.login),
+    );
+    setAccounts((current) => {
+      let next = linked
+        ? current.filter((item) => item.id !== linked.id)
+        : current;
+      const mentors = [
+        demoMentor,
+        ...next.filter(
+          (item) => item.role === "mentor" && item.id !== "demo-mentor",
+        ),
+      ];
+      const assigned = mentors.filter((mentor) =>
+        (mentor.assignedStudentLogins ?? []).some(
+          (login) => normalizeLogin(login) === normalizeLogin(student.login),
+        ),
+      );
+      let synced = mentors;
+      for (const mentor of assigned)
+        synced = assignStudentToMentor(synced, mentor.id, student.login, false);
+      return [
+        ...next.filter(
+          (item) => !synced.some((mentor) => mentor.id === item.id),
+        ),
+        ...synced,
+      ];
+    });
+  };
+  const removeAccount = (account: PulseAccount) => {
+    if (apiReadOnly) {
+      explainReadOnlyApi();
+      return;
+    }
+    if (account.role === "mentor") {
+      const assigned = accounts.some(
+        (item) =>
+          item.role === "student" &&
+          (item.mentorId === account.id ||
+            (item.studentLogin &&
+              account.assignedStudentLogins?.some(
+                (login) =>
+                  normalizeLogin(login) === normalizeLogin(item.studentLogin),
+              ))),
+      );
+      if (assigned || (account.assignedStudentLogins?.length ?? 0) > 0) {
+        setMessage(
+          rtl
+            ? "أعد إسناد طلاب المنتور قبل حذف حسابه."
+            : "Reassign this mentor’s students before deleting the account.",
+        );
+        return;
+      }
+    }
+    if (account.role === "student" && account.studentLogin) {
+      const row = rows.find(
+        (item) =>
+          normalizeLogin(item.login) === normalizeLogin(account.studentLogin),
+      );
+      if (row) {
+        setDeletedStudentIds((current) => [
+          ...new Set([...current, row.studentId]),
+        ]);
+        setManagedStudents((current) =>
+          current.filter((item) => item.studentId !== row.studentId),
+        );
+      }
+    }
+    setAccounts((current) => {
+      let next = current.filter((item) => item.id !== account.id);
+      if (account.role === "student" && account.studentLogin) {
+        const mentors = [
+          demoMentor,
+          ...next.filter(
+            (item) => item.role === "mentor" && item.id !== "demo-mentor",
+          ),
+        ];
+        let synced = mentors;
+        for (const mentor of mentors)
+          if (
+            (mentor.assignedStudentLogins ?? []).some(
+              (login) =>
+                normalizeLogin(login) === normalizeLogin(account.studentLogin),
+            )
+          )
+            synced = assignStudentToMentor(
+              synced,
+              mentor.id,
+              account.studentLogin,
+              false,
+            );
+        next = [
+          ...next.filter(
+            (item) => !synced.some((mentor) => mentor.id === item.id),
+          ),
+          ...synced,
+        ];
+      }
+      return next;
+    });
+  };
+  const saveProfile = (account: PulseAccount): boolean => {
+    if (apiReadOnly) {
+      explainReadOnlyApi();
+      return false;
+    }
+    try {
+      const next = persistProfileAccount(localStorage, account);
+      setAccounts(next);
+      if (account.role === "student" && account.studentLogin) {
+        const row = rows.find(
+          (item) =>
+            normalizeLogin(item.login) === normalizeLogin(account.studentLogin),
+        );
+        if (row) {
+          const synced = syncStudentIdentity(row, {
+            login: account.studentLogin,
+            displayName: account.name,
+          });
+          setManagedStudents((current) => [
+            ...current.filter((item) => item.studentId !== synced.studentId),
+            synced,
+          ]);
+        }
+      }
+      if (account.id === session.id) {
+        const { passwordHash: _passwordHash, ...nextSession } =
+          account as PulseAccount;
+        updateActiveSession(nextSession);
+      }
+      return true;
+    } catch {
+      setMessage(
+        rtl
+          ? "تعذر حفظ الملف الشخصي. مساحة التخزين قد تكون ممتلئة."
+          : "Could not save the profile. Browser storage may be full.",
+      );
+      return false;
+    }
+  };
+  const studentOverview = session.role === "student" && section === "overview";
+  const viewedMentor = viewedMentorId
+    ? mentorAccounts.find((account) => account.id === viewedMentorId)
+    : undefined;
+  const pageTitle = studentOverview
+    ? rtl
+      ? "تقدمي الدراسي"
+      : "My learning pulse"
+    : section === "settings"
+      ? t.settingsTitle
+      : section === "overview"
+        ? t.overviewTitle
+        : section === "team" && viewedMentor
+          ? viewedMentor.name
+          : section === "member-profile"
+            ? viewedProfile.name
+            : t[section];
+  const pageSubtitle = studentOverview
+    ? rtl
+      ? "تابع مستواك ونشاطك ومتابعات فريقك من مكان واحد."
+      : "Track your level, activity, and team follow-ups in one place."
+    : section === "member-profile"
+        ? rtl
+          ? "عرض تفاصيل الملف الشخصي."
+        : `${viewedProfile.role === "manager" ? "Program manager" : viewedProfile.role === "mentor" ? "Mentor" : "Student"} profile.`
+        : section === "team" && viewedMentor
+          ? rtl
+            ? "راجع مساحة المنتور وابدأ العمل بصلاحياته."
+            : "Review this mentor’s workspace or start acting with their permissions."
+          : section === "settings"
+            ? t.settingsSubtitle
+            : t.subtitle;
+  const pageEyebrow =
+    section === "member-profile"
+      ? viewedProfile.role === "manager"
+        ? rtl
+          ? "مدير البرنامج"
+          : "PROGRAM MANAGER PROFILE"
+        : viewedProfile.role === "mentor"
+          ? rtl
+            ? "ملف المنتور"
+            : "MENTOR PROFILE"
+          : rtl
+            ? "ملف الطالب"
+            : "STUDENT PROFILE"
+      : section === "overview"
+        ? isManager
+          ? rtl
+            ? "مدير البرنامج"
+            : "PROGRAM MANAGER"
+          : session.role === "student"
+            ? rtl
+              ? "مساحة الطالب"
+              : "STUDENT WORKSPACE"
+            : t.welcome
+        : isManager
+          ? rtl
+            ? "إدارة البرنامج"
+            : "PROGRAM MANAGER"
+          : session.role === "mentor"
+            ? t.mentor
+            : rtl
+              ? "مساحة الطالب"
+              : "STUDENT WORKSPACE";
+  const can = (key: AccessKey) =>
+    isManager || session.permissions.includes(key);
+  const sidebarCohortName = (data?.cohortName ?? "Coding Cohort")
+    .replace(/\d+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  const overviewSidebarItems =
+    session.role === "student"
+      ? [
+          { id: "progress", icon: <LayoutDashboard size={16} />, label: rtl ? "تقدمي" : "My progress" },
+          {
+            id: "cohort",
+            icon: <UsersRound size={16} />,
+            label: rtl ? "مقارنة الكوهورت" : "Cohort comparison",
+          },
+          { id: "projects", icon: <ClipboardList size={16} />, label: rtl ? "مشاريعي" : "My projects" },
+          {
+            id: "followups",
+            icon: <ClipboardList size={16} />,
+            label: rtl ? "المتابعات" : "Follow-ups",
+          },
+        ]
+      : isManager || can("viewCohort")
+        ? [
+            {
+              id: "summary",
+              icon: <LayoutDashboard size={16} />,
+              label: rtl ? "ملخص الكوهورت" : "Cohort snapshot",
+            },
+            {
+              id: "learning",
+              icon: <UsersRound size={16} />,
+              label: rtl ? "تحليلات الطلاب" : "Student analytics",
+            },
+            { id: "projects", icon: <ClipboardList size={16} />, label: rtl ? "المشاريع" : "Projects" },
+          ]
+        : [];
+
+  const mobileNavItems =
+    session.role === "student"
+      ? [
+          {
+            label: rtl ? "تقدمي" : "My pace",
+            icon: <LayoutDashboard size={18} />,
+            active: () => section === "overview" && overviewTab === "progress",
+            action: () => {
+              setOverviewTab("progress");
+              nav("overview");
+            },
+          },
+          {
+            label: rtl ? "مساري" : "My path",
+            icon: <UsersRound size={18} />,
+            active: () => section === "overview" && overviewTab === "cohort",
+            action: () => {
+              setOverviewTab("cohort");
+              nav("overview");
+            },
+          },
+          {
+            label: rtl ? "مشاريعي" : "Project",
+            icon: <ClipboardList size={18} />,
+            active: () => section === "overview" && overviewTab === "projects",
+            action: () => {
+              setOverviewTab("projects");
+              nav("overview");
+            },
+          },
+          {
+            label: rtl ? "ملاحظات المنتور" : "Mentor notes",
+            icon: <ClipboardList size={18} />,
+            active: () => section === "overview" && overviewTab === "followups",
+            action: () => {
+              setOverviewTab("followups");
+              nav("overview");
+            },
+          },
+        ]
+      : [
+          { label: rtl ? "نظرة عامة" : "Overview", icon: <LayoutDashboard size={18} />, active: () => section === "overview", action: () => nav("overview") },
+          ...(isManager || can("viewCohort")
+            ? [{ label: "Students", icon: <UsersRound size={18} />, active: () => section === "students", action: () => nav("students") }]
+            : []),
+          ...(isManager || can("manageInterventions")
+            ? [
+                {
+                  label: rtl ? "المتابعات" : "Follow-ups",
+                  icon: <ClipboardList size={18} />,
+                  active: () => section === "interventions",
+                  action: () => nav("interventions"),
+                },
+              ]
+            : []),
+          ...(isManager
+            ? [{ label: rtl ? "المزيد" : "More", icon: <SettingsIcon size={18} />, active: () => ["team", "manage", "settings"].includes(section), action: () => setMobileMoreOpen((open) => !open) }]
+            : [
+                ...(can("manageStudents") ? [{ label: rtl ? "إدارة" : "Manage", icon: <UserRoundPlus size={18} />, active: () => section === "manage", action: () => nav("manage") }] : []),
+                { label: rtl ? "الإعدادات" : "Settings", icon: <SettingsIcon size={18} />, active: () => section === "settings", action: () => nav("settings") },
+              ]),
+        ];
 
   // Render the shared navigation shell, role-specific workspace, and overlays.
-  return <div className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`} dir={rtl ? 'rtl' : 'ltr'}>
-    <div className="brand-watermark brand-watermark-primary" aria-hidden="true" />
-    <div className="brand-watermark brand-watermark-secondary" aria-hidden="true" />
-    <aside className="sidebar">
-      <div className="sidebar-head"><button className="brand brand-button" onClick={() => nav('overview')} aria-label="Nextera Pulse home"><img className="brand-logo" src={theme === 'dark' ? '/brand/nextera-wordmark-light.png' : '/brand/nextera-wordmark-dark.png'} alt="Nextera" /><img className="brand-collapsed-mark" src="/brand/nextera-x-mark-trimmed.png" alt="" aria-hidden="true" /><span className="brand-copy"><b>PULSE</b><small>STUDENT SUCCESS</small></span></button><button className="sidebar-collapse" type="button" onClick={() => setSidebarCollapsed(value => !value)} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}><svg viewBox="0 0 20 20" aria-hidden="true"><path d={sidebarCollapsed ? 'M11.5 4.5h2a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-2M9 7.5l-2.5 2.5L9 12.5M5.5 4.5v11' : 'M8.5 4.5h-2a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2M11 7.5l2.5 2.5-2.5 2.5M14.5 4.5v11'} /></svg></button></div>
-      <div className="workspace-label">{isManager ? (rtl ? 'مدير البرنامج' : 'PROGRAM MANAGER') : session.role === 'mentor' ? t.mentor : (rtl ? 'مساحة الطالب' : 'STUDENT WORKSPACE')}</div>
-      <div className="cohort-card"><span className="cohort-icon" aria-hidden="true">◈</span><span><small>{t.cohort}</small><b>{sidebarCohortName}</b></span></div>
-      <nav className="nav-list" aria-label="Main navigation">
-        {(isManager || can('viewProgress')) && <>{overviewSidebarItems.length > 0 ? <div className={`sidebar-overview-menu${overviewSubnavOpen ? ' open' : ''}`}><button type="button" className={`nav-item overview-nav-item${section === 'overview' ? ' active' : ''}`} aria-expanded={overviewSubnavOpen} aria-controls="sidebar-overview-sections" onClick={() => { nav('overview'); setOverviewSubnavOpen(value => !value); }}><span>▦</span><span className="nav-label">{t.overview}</span><span className="overview-nav-chevron" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4" /></svg></span></button>{overviewSubnavOpen && <div id="sidebar-overview-sections" className="sidebar-overview-subnav" aria-label={rtl ? 'أقسام النظرة العامة' : 'Overview sections'}>{overviewSidebarItems.map(item => <button type="button" key={item.id} title={item.label} className={section === 'overview' && overviewTab === item.id ? 'active' : ''} aria-current={section === 'overview' && overviewTab === item.id ? 'page' : undefined} onClick={() => { setOverviewTab(item.id); nav('overview'); }}><span>{item.icon}</span><b>{item.label}</b></button>)}</div>}</div> : <NavItem icon="▦" label={t.overview} active={section === 'overview'} onClick={() => nav('overview')} />}</>}
-        <NavItem icon="⌘" label={t.hierarchy} active={section === 'hierarchy' || section === 'member-profile'} onClick={() => nav('hierarchy')} />
-        {(isManager || (session.role === 'mentor' && can('viewCohort'))) && <NavItem icon="♙" label={t.students} active={section === 'students'} onClick={() => nav('students')} />}
-        {(isManager || (session.role === 'mentor' && can('manageInterventions'))) && <NavItem icon="↗" label={t.interventions} active={section === 'interventions'} onClick={() => nav('interventions')} />}
-        {(isManager || (session.role === 'mentor' && can('manageStudents'))) && <NavItem icon="＋" label={t.manage} active={section === 'manage'} onClick={() => nav('manage')} />}
-        {!usingLiveApi && (isManager || (session.role === 'mentor' && can('manageAccounts'))) && <NavItem icon="♧" label={t.accounts} active={section === 'accounts'} onClick={() => nav('accounts')} />}
-        {(isManager || session.role === 'mentor') && <NavItem icon="◉" label={t.team} active={section === 'team'} onClick={() => nav('team')} />}
-        <NavItem icon="◎" label={t.profile} active={section === 'profile' && viewedProfile.id === session.id} onClick={() => nav('profile')} />
-        {session.role !== 'student' && <NavItem icon="⚙" label={t.settings} active={section === 'settings'} onClick={() => nav('settings')} />}
+  return (
+    <div
+      className={`app-shell${sidebarHidden ? " sidebar-hidden" : ""}`}
+      dir={rtl ? "rtl" : "ltr"}
+    >
+      <aside className="sidebar">
+        <div className="sidebar-head">
+          <button
+            className="brand brand-button"
+            onClick={() => nav("overview")}
+            aria-label="Nextera Pulse home"
+          >
+            <img
+              className="brand-logo"
+              src={
+                theme === "dark"
+                  ? "/brand/nextera-wordmark-light.png"
+                  : "/brand/nextera-wordmark-dark.png"
+              }
+              alt="Nextera"
+            />
+            <span className="brand-copy">
+              <b>PULSE</b>
+              <small>STUDENT SUCCESS</small>
+            </span>
+          </button>
+        </div>
+        <div className="workspace-label">
+          {isManager
+            ? rtl
+              ? "مدير البرنامج"
+              : "PROGRAM MANAGER"
+            : session.role === "mentor"
+              ? t.mentor
+              : rtl
+                ? "مساحة الطالب"
+                : "STUDENT WORKSPACE"}
+        </div>
+        <div className="cohort-card">
+          <span className="cohort-icon" aria-hidden="true">
+            <Layers3 size={18} aria-hidden="true" />
+          </span>
+          <span>
+            <small>{t.cohort}</small>
+            <b>{sidebarCohortName}</b>
+          </span>
+        </div>
+        <nav className="nav-list" aria-label="Main navigation">
+          {(isManager || can("viewProgress")) && (
+            <NavItem icon={<LayoutDashboard size={18} />} label={t.overview} active={section === "overview"} onClick={() => nav("overview")} />
+          )}
+          {(isManager || (session.role === "mentor" && can("viewCohort"))) && (
+            <NavItem
+              icon={<UsersRound size={18} />}
+              label={t.students}
+              active={section === "students"}
+              onClick={() => nav("students")}
+            />
+          )}
+          {(isManager ||
+            (session.role === "mentor" && can("manageInterventions"))) && (
+            <NavItem
+              icon={<ClipboardList size={18} />}
+              label={t.interventions}
+              active={section === "interventions"}
+              onClick={() => nav("interventions")}
+            />
+          )}
+          {(isManager ||
+            (session.role === "mentor" && can("manageStudents"))) && (
+            <NavItem
+              icon={<UserRoundPlus size={18} />}
+              label={t.manage}
+              active={section === "manage"}
+              onClick={() => nav("manage")}
+            />
+          )}
+          {!usingLiveApi && (isManager ||
+            (session.role === "mentor" && can("manageAccounts"))) && (
+            <NavItem
+              icon={<ShieldCheck size={18} />}
+              label={t.accounts}
+              active={section === "accounts"}
+              onClick={() => nav("accounts")}
+            />
+          )}
+          {(isManager || session.role === "mentor") && (
+            <NavItem
+              icon={<UsersRound size={18} />}
+              label={t.team}
+              active={section === "team"}
+              onClick={() => nav("team")}
+            />
+          )}
+          {session.role !== "student" && (
+            <NavItem
+              icon={<SettingsIcon size={18} />}
+              label={t.settings}
+              active={section === "settings"}
+              onClick={() => nav("settings")}
+            />
+          )}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="user-card">
+            <ProfileAvatar account={session} size="small" />
+            <div>
+              <b>{session.name}</b>
+              <small>
+                {session.role === "manager"
+                  ? "Program Manager"
+                  : session.role === "mentor"
+                    ? "Mentor"
+                    : "Student"}
+              </small>
+            </div>
+          </div>
+          <button className="logout-button" type="button" onClick={onSignOut}>
+            <LogOut size={16} aria-hidden="true" />
+            <span>Log out</span>
+          </button>
+        </div>
+      </aside>
+
+      <main className="main-area">
+        <header className="topbar">
+          <button
+            className="icon-button sidebar-toggle"
+            type="button"
+            onClick={() => setSidebarHidden((hidden) => !hidden)}
+            aria-label={sidebarHidden ? "Show navigation" : "Hide navigation"}
+            title={sidebarHidden ? "Show navigation" : "Hide navigation"}
+          >
+            {sidebarHidden ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+          </button>
+          <div className="breadcrumb">
+            <span className="breadcrumb-role">
+              {isManager
+                ? rtl
+                  ? "مدير البرنامج"
+                  : "PROGRAM MANAGER"
+                : session.role === "mentor"
+                  ? t.mentor
+                  : rtl
+                    ? "مساحة الطالب"
+                    : "STUDENT WORKSPACE"}
+            </span>
+            <span>/</span>
+            <b>{pageTitle}</b>
+          </div>
+          <div className="top-actions">
+            <button
+              className="icon-button theme-toggle"
+              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+              aria-label={
+                theme === "light"
+                  ? "Switch to dark mode"
+                  : "Switch to light mode"
+              }
+            >
+              {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
+            </button>
+            <div className="notification-wrap" ref={notificationWrap}>
+              <button
+                className={`icon-button notification${unreadNotificationCount > 0 ? " has-unread" : ""}`}
+                aria-label={
+                  unreadNotificationCount
+                    ? `${t.notifications}, ${unreadNotificationCount} unread`
+                    : t.notifications
+                }
+                aria-expanded={notificationsOpen}
+                onClick={() => setNotificationsOpen((open) => !open)}
+              >
+                <Bell size={19} aria-hidden="true" />
+                {unreadNotificationCount > 0 && (
+                  <span className="notification-count" aria-hidden="true">
+                    {unreadNotificationCount > 99
+                      ? "99+"
+                      : unreadNotificationCount}
+                  </span>
+                )}
+              </button>
+              {notificationsOpen && (
+                <section
+                  className="notification-popover"
+                  aria-label={t.notifications}
+                >
+                  <header>
+                    <b>{t.notifications}</b>
+                    <div className="notification-header-actions">
+                      <small>{unreadNotificationCount} unread</small>
+                      {unreadNotificationCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllNotificationsRead}
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                  </header>
+                  {notificationItems.length > 0 ? (
+                    <div className="notification-list">
+                      {notificationItems.map((item) => {
+                        const complete = completedNotifications.includes(
+                          item.id,
+                        );
+                        return (
+                          <div
+                            className={`notification-item${complete ? " is-complete" : ""}`}
+                            key={item.id}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={complete}
+                              aria-label={`${complete ? "Mark unread" : "Mark read"}: ${item.title}`}
+                              onChange={() => toggleNotification(item.id)}
+                            />
+                            <button
+                              className="notification-item-copy"
+                              type="button"
+                              onClick={() => openNotification(item.id)}
+                            >
+                              <b>{item.title}</b>
+                              <small>{item.detail}</small>
+                              <i>{item.meta}</i>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="notification-empty">{t.noNotifications}</p>
+                  )}
+                </section>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <section className="content">
+          {actingAsMentor && (
+            <div className="acting-as-banner" role="status">
+              <span>
+                <b>
+                  {rtl
+                    ? `تعمل الآن كـ ${actingAsMentor.name}`
+                    : `Acting as ${actingAsMentor.name}`}
+                </b>
+                <small>
+                  {rtl
+                    ? `الحساب الفعلي: ${signedInSession.name}. ستُسجل المتابعات باسم المنتور مع حفظ اسمك كمنفذ.`
+                    : `Signed in as ${signedInSession.name}. Actions use the mentor identity and record you as the operator.`}
+                </small>
+              </span>
+              <button type="button" onClick={stopActingAsMentor}>
+                {rtl ? "العودة لحسابي" : "Return to my account"}
+              </button>
+            </div>
+          )}
+          <div className="page-heading">
+            <div>
+              <div className="eyebrow">{pageEyebrow}</div>
+              <h1>
+                {pageTitle}
+                <span className="title-dot">.</span>
+              </h1>
+              <p>{pageSubtitle}</p>
+            </div>
+          </div>
+
+          {(!isManager || section !== "overview") &&
+            (isManager || (session.role === "mentor" && can("viewCohort"))) &&
+            (section === "overview" || section === "students") && (
+              <div className="stats-grid">
+                <Stat
+                  icon="♙"
+                  label={rtl ? "طلاب ضمن مؤشرات النشاط" : "Active KPI students"}
+                  value={activeKpiRows.length}
+                  foot={
+                    rtl
+                      ? `من ${visibleRows.length} سجلًا ظاهرًا`
+                      : `of ${visibleRows.length} visible records`
+                  }
+                  color="mint"
+                />
+                <Stat
+                  icon="↗"
+                  label={t.on}
+                  value={count(["GREEN"])}
+                  foot={
+                    rtl
+                      ? "من الطلاب النشطين حسب قواعد الأكاديمية"
+                      : "Active population only"
+                  }
+                  color="green"
+                />
+                <Stat
+                  icon="◉"
+                  label={t.attention}
+                  value={count(["YELLOW", "RED"])}
+                  foot={
+                    rtl
+                      ? "من الطلاب النشطين حسب قواعد الأكاديمية"
+                      : "Active population only"
+                  }
+                  color="amber"
+                />
+                <Stat
+                  icon="Ⅱ"
+                  label={t.paused}
+                  value={
+                    visibleRows.filter((s) => s.paceStatus === "PAUSED").length
+                  }
+                  foot={
+                    rtl
+                      ? "مستبعدون من مؤشرات النشاط"
+                      : "Excluded from active KPIs"
+                  }
+                  color="slate"
+                />
+              </div>
+            )}
+
+          {section === "overview" && isManager && (
+            <div className="manager-dashboard-sections">
+              <OverviewSectionTabs
+                label={rtl ? "أقسام النظرة العامة" : "Overview sections"}
+                active={overviewTab}
+                onChange={setOverviewTab}
+                items={overviewSidebarItems}
+              />
+              {overviewTab === "summary" && (
+                <>
+                  <ManagerOverview
+                    mentors={mentorAccounts}
+                    rows={rows}
+                    interventions={interventions}
+                    lang={lang}
+                    kpis={onTrackKpis}
+                    onOpenTeam={() => nav("team")}
+                    onOpenMentor={openMentorWorkspace}
+                  />
+                  <OverviewPanel
+                    rows={activeKpiRows}
+                    accounts={accounts}
+                    lang={lang}
+                    onSelect={setSelectedStudent}
+                    labels={t}
+                  />
+                </>
+              )}
+              {overviewTab === "learning" && (
+                <MentorAnalytics
+                  rows={visibleRows}
+                  interventions={visibleInterventions}
+                  lang={lang}
+                  onSelect={setSelectedStudent}
+                  scope="program"
+                  accounts={accounts}
+                  mentors={mentorAccounts}
+                  includeProjects={false}
+                />
+              )}
+              {overviewTab === "projects" && (
+                <ProjectProgress
+                  rows={rows}
+                  accounts={accounts}
+                  mentors={mentorAccounts}
+                  lang={lang}
+                  view="cohort"
+                  onSelectStudent={setSelectedStudent}
+                />
+              )}
+            </div>
+          )}
+          {section === "overview" &&
+            session.role === "student" &&
+            (can("viewProgress") ? (
+              <StudentHome
+                student={
+                  rows.find(
+                    (row) => normalizeLogin(row.login) === studentLogin,
+                  ) ?? null
+                }
+                lang={lang}
+                cohortRows={rows}
+                interventions={interventions.filter((item) =>
+                  rows.find(
+                    (row) =>
+                      row.studentId === item.studentId &&
+                      normalizeLogin(row.login) === studentLogin,
+                  ),
+                )}
+                accounts={accounts}
+                mentors={mentorAccounts}
+                viewer={session}
+                onOpenProfile={openInterventionAuthor}
+                activeTab={overviewTab}
+                onActiveTabChange={setOverviewTab}
+              />
+            ) : (
+              <NoAccess lang={lang} />
+            ))}
+          {section === "overview" &&
+            session.role === "mentor" &&
+            (can("viewProgress") ? (
+              can("viewCohort") ? (
+                <div className="mentor-dashboard-sections">
+                  <OverviewSectionTabs
+                    label={rtl ? "أقسام النظرة العامة" : "Overview sections"}
+                    active={overviewTab}
+                    onChange={setOverviewTab}
+                    items={overviewSidebarItems}
+                  />
+                  {overviewTab === "summary" && (
+                    <OverviewPanel
+                      rows={activeKpiRows}
+                      accounts={accounts}
+                      lang={lang}
+                      onSelect={setSelectedStudent}
+                      labels={t}
+                    />
+                  )}
+                  {overviewTab === "learning" && (
+                    <MentorAnalytics
+                      rows={visibleRows}
+                      interventions={
+                        can("manageInterventions")
+                          ? interventions.filter((item) =>
+                              visibleRows.some(
+                                (student) =>
+                                  student.studentId === item.studentId,
+                              ),
+                            )
+                          : []
+                      }
+                      lang={lang}
+                      onSelect={setSelectedStudent}
+                      comparisonRows={rows}
+                      accounts={accounts}
+                      mentors={mentorAccounts}
+                      includeProjects={false}
+                    />
+                  )}
+                  {overviewTab === "projects" && (
+                    <ProjectProgress
+                      rows={rows}
+                      accounts={accounts}
+                      mentors={mentorAccounts}
+                      lang={lang}
+                      view="cohort"
+                      onSelectStudent={setSelectedStudent}
+                    />
+                  )}
+                </div>
+              ) : (
+                <NoAccess lang={lang} />
+              )
+            ) : (
+              <NoAccess lang={lang} />
+            ))}
+          {(isManager || (session.role === "mentor" && can("viewCohort"))) &&
+            section === "students" && (
+              <section className="table-panel">
+                <div className="table-heading">
+                  <div>
+                    <h2>{t.students}</h2>
+                    <p>
+                      {rtl
+                        ? "تابع نشاط الطلاب ومستوى تقدمهم."
+                        : "Pace, gaps, and 01Edu status come from the server. This screen does not recalculate them."}
+                    </p>
+                  </div>
+                  <span className="cohort-pill">
+                    <span />
+                    {data?.cohortName ?? "01 Coding · Cohort 2"}
+                  </span>
+                </div>
+                <div className="filter-bar">
+                  <label className="search-box">
+                    <Search size={16} aria-hidden="true" />
+                    <input
+                      ref={searchInput}
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder={t.search}
+                    />
+                    <kbd>Ctrl K</kbd>
+                  </label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    aria-label={t.status}
+                  >
+                    <option value="ALL">{t.all}</option>
+                    {statuses.map((s) => (
+                      <option key={s} value={s}>
+                        {statusNames[lang][s]}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={month}
+                    onChange={(e) => setMonth(e.target.value)}
+                    aria-label={t.month}
+                  >
+                    <option value="ALL">
+                      {t.month}: {rtl ? "الكل" : "All"}
+                    </option>
+                    {[
+                      ...new Set(
+                        visibleRows
+                          .map((s) => s.curriculumMonth)
+                          .filter((m) => m > 0),
+                      ),
+                    ]
+                      .sort((a, b) => a - b)
+                      .map((m) => (
+                        <option key={m} value={m}>
+                          {rtl ? `الشهر ${m}` : `Month ${m}`}
+                        </option>
+                      ))}
+                  </select>
+                  <select
+                    value={sourceStatus}
+                    onChange={(e) => setSourceStatus(e.target.value)}
+                    aria-label="01Edu status"
+                  >
+                    <option value="ALL">01Edu status: All</option>
+                    {[...new Set(visibleRows.map((student) => String(student.sourceStatus)))].sort().map((value) => (
+                      <option key={value} value={value}>{value}</option>
+                    ))}
+                  </select>
+                  {(search || status !== "ALL" || month !== "ALL" || sourceStatus !== "ALL") && (
+                    <button
+                      className="clear-filters"
+                      onClick={() => {
+                        setSearch("");
+                        setStatus("ALL");
+                        setMonth("ALL");
+                        setSourceStatus("ALL");
+                      }}
+                    >
+                      {t.clear}
+                    </button>
+                  )}
+                </div>
+                {error ? (
+                  <div className="state-card error-state">
+                    <div className="state-icon">!</div>
+                    <h3>
+                      {rtl ? "تعذر تحميل الطلاب" : "Could not load students"}
+                    </h3>
+                    <p>{error}</p>
+                    <button
+                      className="primary-button"
+                      onClick={() => setRetry((x) => x + 1)}
+                    >
+                      {t.retry}
+                    </button>
+                  </div>
+                ) : !data ? (
+                  <div className="state-card">
+                    <div className="spinner" />
+                    <p>{t.loading}</p>
+                  </div>
+                ) : (
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{t.student}</th>
+                          <th>{t.month}</th>
+                          <th>{t.level}</th>
+                          <th>{t.target}</th>
+                          <th>{t.gap}</th>
+                          <th>{t.status}</th>
+                          <th>01Edu status</th>
+                          <th />
+                        </tr>
+                      </thead>
+                    <tbody>
+                        {pageRows.map((s) => (
+                          <StudentRow
+                            key={s.studentId}
+                            s={s}
+                            accounts={accounts}
+                            lang={lang}
+                            onSelect={setSelectedStudent}
+                          />
+                        ))}
+                        {filtered.length === 0 && (
+                          <tr>
+                            <td colSpan={8}>
+                              <div className="empty-state">
+                                <span>⌕</span>
+                                <b>{t.empty}</b>
+                                {(search ||
+                                  status !== "ALL" ||
+                                  month !== "ALL" ||
+                                  sourceStatus !== "ALL") && (
+                                  <button
+                                    onClick={() => {
+                                      setSearch("");
+                                      setStatus("ALL");
+                                      setMonth("ALL");
+                                      setSourceStatus("ALL");
+                                    }}
+                                  >
+                                    {t.clear}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {data && (
+                  <div className="student-mobile-list" aria-label={t.students}>
+                    {pageRows.map((student) => (
+                      <button className="student-mobile-card" key={student.studentId} type="button" onClick={() => setSelectedStudent(student)}>
+                        <span><b>{student.displayName || student.login}</b><small>@{student.login}</small></span>
+                        <span className={`status-badge ${student.paceStatus.toLowerCase()}`}><i />{statusNames[lang][student.paceStatus]}</span>
+                        <span>{t.month} <b>{student.curriculumMonth || "—"}</b></span>
+                        <span>{t.level} <b>{student.actualLevel}</b></span>
+                        <span>{t.target} <b>{student.minimumLevel ?? "—"} / {student.expectedLevel ?? "—"}</b></span>
+                        <span>Gap to min <b>{student.gapToMinimum ?? "—"}</b></span>
+                        <span>01Edu status <b>{student.sourceStatus || "—"}</b></span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {data && filtered.length > 25 && (
+                  <nav className="table-pagination" aria-label="Student pages">
+                    <span>{(studentPage - 1) * 25 + 1}–{Math.min(studentPage * 25, filtered.length)} of {filtered.length}</span>
+                    <div>
+                      <button type="button" disabled={studentPage <= 1} onClick={() => setStudentPage((page) => Math.max(1, page - 1))}>Previous</button>
+                      <b>{studentPage} / {studentPageCount}</b>
+                      <button type="button" disabled={studentPage >= studentPageCount} onClick={() => setStudentPage((page) => Math.min(studentPageCount, page + 1))}>Next</button>
+                    </div>
+                  </nav>
+                )}
+                <footer className="table-footer">
+                  <span>
+                    {data
+                      ? `${rtl ? "عرض" : "Showing"} ${pageRows.length} ${rtl ? "من" : "of"} ${filtered.length} ${rtl ? "طلاب" : "students"}`
+                      : " "}
+                  </span>
+                  <span>
+                    {t.updated}: {todayLabel}
+                  </span>
+                </footer>
+              </section>
+            )}
+
+          {(isManager ||
+            (session.role === "mentor" && can("manageInterventions"))) &&
+            section === "interventions" && (
+              <section className="table-panel feature-panel">
+                <div className="table-heading">
+                  <div>
+                    <h2>{t.interventions}</h2>
+                    <p>
+                      {rtl
+                        ? "سجّل ملاحظات المتابعة محليًا في هذه النسخة التجريبية."
+                        : "Keep simple follow-up notes in this local demo."}
+                    </p>
+                  </div>
+                  <button
+                    className="primary-button"
+                    onClick={() => setShowInterventionForm((open) => !open)}
+                  >
+                    {showInterventionForm
+                      ? t.cancel
+                      : `＋ ${t.addIntervention}`}
+                  </button>
+                </div>
+                {apiReadOnly && (
+                  <p className="api-readonly-note" role="status">
+                    Read-only API connection: follow-up changes wait for backend
+                    write endpoints. No changes will be reported as saved.
+                  </p>
+                )}
+                {showInterventionForm && (
+                  <form
+                    className="intervention-form"
+                    onSubmit={saveIntervention}
+                  >
+                    <label>
+                      {t.student}
+                      <select
+                        value={interventionStudent}
+                        onChange={(e) => setInterventionStudent(e.target.value)}
+                        required
+                      >
+                        <option value="">{t.chooseStudent}</option>
+                        {visibleInterventionRows.map((student) => (
+                          <option
+                            key={student.studentId}
+                            value={student.studentId}
+                          >
+                            {student.displayName || student.login}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      {t.note}
+                      <textarea
+                        ref={interventionTextarea}
+                        value={interventionNote}
+                        onChange={(e) => setInterventionNote(e.target.value)}
+                        placeholder={t.enterNote}
+                        rows={3}
+                        required
+                      />
+                    </label>
+                    <button className="primary-button" type="submit">
+                      {t.save}
+                    </button>
+                  </form>
+                )}
+                {showInterventionForm && selectedInterventionStudent && (
+                  <StudentContactDetails
+                    student={selectedInterventionStudent}
+                    accounts={accounts}
+                    lang={lang}
+                  />
+                )}
+                {visibleInterventions.length ? (
+                  <div className="intervention-list">
+                    {visibleInterventions.map((item) => {
+                      const student = visibleInterventionRows.find(
+                        (s) => s.studentId === item.studentId,
+                      );
+                      return (
+                        <article className="intervention-item" key={item.id}>
+                          {student ? (
+                            <StudentAvatar
+                              student={student}
+                              accounts={accounts}
+                            />
+                          ) : (
+                            <span className="avatar student-avatar avatar-2">
+                              ?
+                            </span>
+                          )}
+                          <div>
+                            <b>
+                              {student?.displayName ||
+                                (rtl ? "طالب غير معروف" : "Unknown student")}
+                            </b>
+                            <p>{item.note}</p>
+                            <small>
+                              {dateText(item.createdAt.slice(0, 10), lang)}
+                            </small>
+                          </div>
+                          {canDeleteFollowUp(item) && (
+                            <button
+                              className="row-more"
+                              aria-label="Remove follow-up"
+                              onClick={() => void removeFollowUp(item)}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <b>{t.noInterventions}</b>
+                  </div>
+                )}
+              </section>
+            )}
+
+          {(isManager ||
+            (session.role === "mentor" && can("manageStudents"))) &&
+            section === "manage" && (
+              <ManageStudents
+                rows={isManager ? rows : assignedRows}
+                accounts={accounts}
+                lang={lang}
+                readOnly={apiReadOnly}
+                onEdit={(student) => {
+                  setEditingStudent(student);
+                  setStudentFormOpen(true);
+                }}
+                onDelete={(student) => {
+                  if (
+                    window.confirm(
+                      rtl
+                        ? `حذف ${student.displayName || student.login} من العرض التجريبي مع حسابه المرتبط؟`
+                        : `Remove ${student.displayName || student.login} and the linked account from this demo?`,
+                    )
+                  )
+                    removeStudentRecord(student);
+                }}
+              />
+            )}
+          {!usingLiveApi && (isManager ||
+            (session.role === "mentor" && can("manageAccounts"))) &&
+            section === "accounts" && (
+              <AccountManager
+                accounts={accountRows}
+                studentRecords={unlinkedStudentRecords}
+                mode={isManager ? "manager" : "mentor"}
+                lang={lang}
+                capacityLimit={
+                  session.role === "mentor"
+                    ? (session.capacityLimit ?? demoMentor.capacityLimit)
+                    : undefined
+                }
+                capacityUsed={assignedRows.length}
+                onSave={updateAccount}
+                onDelete={(account) => {
+                  if (account.id === session.id) {
+                    setMessage(
+                      rtl
+                        ? "لا يمكن حذف الحساب المستخدم حاليًا."
+                        : "You cannot remove the account you are using.",
+                    );
+                    return;
+                  }
+                  if (
+                    window.confirm(
+                      rtl
+                        ? `حذف حساب ${account.name}؟ سيتم حذف سجل الطالب المرتبط أيضًا.`
+                        : `Delete ${account.name}’s account and linked student record?`,
+                    )
+                  )
+                    removeAccount(account);
+                }}
+                onOpenProfile={openAccountProfile}
+                onOpenWorkspace={openMentorWorkspace}
+              />
+            )}
+          {section === "team" &&
+            isManager &&
+            (viewedMentor ? (
+              <MentorWorkspaceView
+                mentor={viewedMentor}
+                students={rows}
+                accounts={accounts}
+                mentors={mentorAccounts}
+                interventions={interventions}
+                lang={lang}
+                kpis={onTrackKpis}
+                onSelectStudent={setSelectedStudent}
+                onBack={() => setViewedMentorId(null)}
+                onActAs={() => beginActingAsMentor(viewedMentor)}
+              />
+            ) : (
+              <>
+                {apiReadOnly && (
+                  <p className="api-readonly-note" role="status">
+                    Read-only API connection: mentor assignments require backend
+                    write endpoints.
+                  </p>
+                )}
+                <TeamManagement
+                  mentors={mentorAccounts}
+                  rows={rows}
+                  lang={lang}
+                  onUpdate={updateMentor}
+                  onAssign={assignStudent}
+                />
+              </>
+            ))}
+          {section === "team" &&
+            session.role === "mentor" &&
+            (viewedMentor ? (
+              <MentorWorkspaceView
+                mentor={viewedMentor}
+                students={rows}
+                accounts={accounts}
+                mentors={mentorAccounts}
+                interventions={interventions}
+                lang={lang}
+                kpis={onTrackKpis}
+                onSelectStudent={setSelectedStudent}
+                onBack={() => setViewedMentorId(null)}
+                onActAs={() => beginActingAsMentor(viewedMentor)}
+              />
+            ) : (
+              <ManagerOverview
+                mentors={mentorAccounts}
+                rows={rows}
+                interventions={interventions}
+                lang={lang}
+                kpis={onTrackKpis}
+                onOpenMentor={openMentorWorkspace}
+              />
+            ))}
+          {section === "member-profile" && (
+            <div className="member-profile-back">
+              <button
+                type="button"
+                onClick={() =>
+                  nav(
+                    memberProfileReturnSection,
+                  )
+                }
+              >
+                <span aria-hidden="true">←</span>
+                {rtl ? "العودة للطلاب" : "Students"}
+              </button>
+            </div>
+          )}
+          {section === "member-profile" && (
+            <ProfilePage
+              key={viewedProfile.id}
+              account={viewedProfile}
+              viewer={session}
+              lang={lang}
+              onSave={saveProfile}
+              readOnly={syntheticStudentProfile || readOnlyProfile}
+              studentDetails={viewedStudentRecord}
+            >
+              {viewedProfile.role === "student" &&
+                viewedStudentRecord &&
+                (session.role === "mentor" || session.role === "manager") && (
+                  <StudentProfileInsights
+                    student={viewedStudentRecord}
+                    cohortRows={rows}
+                    accounts={accounts}
+                    mentors={mentorAccounts}
+                    interventions={interventions}
+                    lang={lang}
+                  />
+                )}
+            </ProfilePage>
+          )}
+          {session.role !== "student" && section === "settings" && (
+            <section className="table-panel settings-panel">
+              <SettingRow
+                title={t.appearance}
+                description={
+                  theme === "light"
+                    ? rtl
+                      ? "الوضع الفاتح"
+                      : "Light theme"
+                    : rtl
+                      ? "الوضع الداكن"
+                      : "Dark theme"
+                }
+                action={
+                  <button
+                    className="setting-action"
+                    onClick={() =>
+                      setTheme(theme === "light" ? "dark" : "light")
+                    }
+                  >
+                    {theme === "light" ? "☾" : "☀"} {rtl ? "تغيير" : "Change"}
+                  </button>
+                }
+              />
+              <SettingRow
+                title={t.dataSource}
+                description={
+                  apiReadOnly
+                    ? "Live student records from the backend. Write endpoints are not available yet."
+                    : t.demoDescription
+                }
+                action={
+                  <span className="demo-tag">
+                    <span />
+                    {apiReadOnly ? "API data · read-only" : t.demo}
+                  </span>
+                }
+              />
+              <div className="settings-note">
+                {rtl
+                  ? "ربط الحساب والصلاحيات والبيانات الحقيقية سيتم من خلال خدمات الخلفية عند تجهيز الـAPI."
+                  : "Student records are read from the API. Write endpoints for accounts, follow-ups, and assignments are not available yet."}
+              </div>
+            </section>
+          )}
+
+          <div className="page-footer">
+            <span>© 2026 Nextera Pulse</span>
+            <span>
+              {rtl
+                ? "ذكاء التعلّم للمنتورز"
+                : "Learning intelligence for mentors"}
+            </span>
+          </div>
+        </section>
+      </main>
+      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+        {mobileNavItems.map((item) => (
+          <button
+            type="button"
+            key={item.label}
+            className={item.active?.() ? "active" : ""}
+            onClick={item.action}
+          >
+            <span aria-hidden="true">{item.icon}</span>
+            <b>{item.label}</b>
+          </button>
+        ))}
       </nav>
-      <div className="sidebar-bottom">
-        <button className="help-card help-button" onClick={() => setHelpOpen(true)}><span className="help-icon">?</span><span className="help-copy"><b>{rtl ? 'هل تحتاج مساعدة؟' : 'Need a hand?'}</b><small>{rtl ? 'معلومات عن هذه النسخة' : 'About this demo'}</small></span><span>↗</span></button>
-        <button className="user-card user-profile-link" onClick={() => nav('profile')}><ProfileAvatar account={session} size="small" /><div><b>{session.name}</b><small>{session.email}</small></div><span className="signout" title={rtl ? 'تسجيل الخروج' : 'Sign out'} onClick={event => { event.stopPropagation(); onSignOut() ;}} aria-label={rtl ? 'تسجيل الخروج' : 'Sign out'}>↪</span></button>
-      </div>
-    </aside>
-    <button className="sidebar-scrim" type="button" aria-label="Close navigation" onClick={() => setSidebarCollapsed(true)} />
-
-    <main className="main-area">
-      <header className="topbar"><div className="breadcrumb">{isManager ? (rtl ? 'مدير البرنامج' : 'PROGRAM MANAGER') : session.role === 'mentor' ? t.mentor : (rtl ? 'مساحة الطالب' : 'STUDENT WORKSPACE')}<span>/</span><b>{pageTitle}</b></div><div className="top-actions"><span className="demo-tag" title={sourceDescription} aria-label={sourceDescription}><span />{sourceLabel}</span><button className="icon-button theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>{theme === 'light' ? '☾' : '☀'}</button><div className="notification-wrap" ref={notificationWrap}><button className={`icon-button notification${unreadNotificationCount > 0 ? ' has-unread' : ''}`} aria-label={unreadNotificationCount ? `${t.notifications}, ${unreadNotificationCount} unread` : t.notifications} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen(open => !open)}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>{unreadNotificationCount > 0 && <span className="notification-count" aria-hidden="true">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>}</button>{notificationsOpen && <section className="notification-popover" aria-label={t.notifications}><header><b>{t.notifications}</b><div className="notification-header-actions"><small>{unreadNotificationCount} unread</small>{unreadNotificationCount > 0 && <button type="button" onClick={markAllNotificationsRead}>Mark all read</button>}</div></header>{notificationItems.length > 0 ? <div className="notification-list">{notificationItems.map(item => { const complete = completedNotifications.includes(item.id); return <div className={`notification-item${complete ? ' is-complete' : ''}`} key={item.id}><input type="checkbox" checked={complete} aria-label={`${complete ? 'Mark unread' : 'Mark read'}: ${item.title}`} onChange={() => toggleNotification(item.id)} /><button className="notification-item-copy" type="button" onClick={() => openNotification(item.id)}><b>{item.title}</b><small>{item.detail}</small><i>{item.meta}</i></button></div>;})}</div> : <p className="notification-empty">{t.noNotifications}</p>}</section>}</div><button className="topbar-profile-button" type="button" onClick={() => nav('profile')} aria-label={rtl ? 'فتح الملف الشخصي' : 'Open profile'} title={rtl ? 'ملفي الشخصي' : 'My profile'}><ProfileAvatar account={session} size="small" /></button><button className="topbar-signout-btn" type="button" onClick={onSignOut} title={rtl ? 'تسجيل الخروج' : 'Sign out'} aria-label={rtl ? 'تسجيل الخروج' : 'Sign out'}>↪ {rtl ? 'خروج' : 'Log out'}</button></div></header>
-
-      <section className="content">
-        {actingAsMentor && <div className="acting-as-banner" role="status"><span><b>{rtl ? `تعمل الآن كـ ${actingAsMentor.name}` : `Acting as ${actingAsMentor.name}`}</b><small>{rtl ? `الحساب الفعلي: ${signedInSession.name}. ستُسجل المتابعات باسم المنتور مع حفظ اسمك كمنفذ.` : `Signed in as ${signedInSession.name}. Actions use the mentor identity and record you as the operator.`}</small></span><button type="button" onClick={stopActingAsMentor}>{rtl ? 'العودة لحسابي' : 'Return to my account'}</button></div>}
-        <div className="page-heading"><div><div className="eyebrow">{pageEyebrow}</div><h1>{pageTitle}<span className="title-dot">.</span></h1><p>{pageSubtitle}</p></div><div className="date-chip"><span>▦</span>{todayLabel}</div></div>
-
-        {(!isManager || section !== 'overview') && (isManager || (session.role === 'mentor' && can('viewCohort'))) && (section === 'overview' || section === 'students') && <div className="stats-grid"><Stat icon="↗" label={isManager ? (rtl ? 'نسبة على المسار (البرنامج)' : 'On-track rate · program') : (rtl ? 'نسبة على المسار (طلابك)' : 'On-track rate · your students')} value={headline.value} foot={headline.foot} color={headline.tone === 'error' ? 'amber' : 'green'} /><Stat icon="◉" label={rtl ? 'مراقبة' : 'Watch'} value={shownCount(headlineKpi?.measurableCounts.YELLOW)} foot={rtl ? 'قابلون للقياس وتحت المتوقع' : 'Measurable, below expected (YELLOW)'} color="amber" /><Stat icon="!" label={rtl ? 'متأخرون' : 'Off pace'} value={shownCount(headlineKpi?.measurableCounts.RED)} foot={rtl ? 'قابلون للقياس وتحت الحد الأدنى' : 'Measurable, below minimum (RED)'} color="amber" /><Stat icon="Ⅱ" label={t.paused} value={visibleRows.filter(s => s.paceStatus === 'PAUSED').length} foot={rtl ? 'غير قابلين للقياس' : 'Not measurable'} color="slate" /></div>}
-
-        {section === 'overview' && isManager && <div className="manager-dashboard-sections"><OverviewSectionTabs label={rtl ? 'أقسام النظرة العامة' : 'Overview sections'} active={overviewTab} onChange={setOverviewTab} items={overviewSidebarItems} />{overviewTab === 'summary' && <><ManagerOverview mentors={mentorAccounts} rows={learnerRows} interventions={interventions} lang={lang} kpis={onTrackKpis} onOpenTeam={() => nav('team')} onOpenMentor={openMentorWorkspace} /><OverviewPanel rows={visibleRows} accounts={accounts} lang={lang} onSelect={setSelectedStudent} labels={t} /></>}{overviewTab === 'learning' && <MentorAnalytics rows={visibleRows} interventions={visibleInterventions} lang={lang} onSelect={setSelectedStudent} scope="program" accounts={accounts} mentors={mentorAccounts} includeProjects={false} />}{overviewTab === 'projects' && <ProjectProgress rows={rows} accounts={accounts} mentors={mentorAccounts} lang={lang} view="cohort" onSelectStudent={setSelectedStudent} />}</div>}
-        {section === 'hierarchy' && <TeamHierarchy manager={programManagerAccount} managers={useLiveStaff ? liveManagers : undefined} mentors={mentorAccounts} rows={learnerRows} accounts={accounts} viewer={session} lang={lang} onOpenAccount={openHierarchyAccount} onOpenStudent={openHierarchyStudent} />}
-        {section === 'overview' && session.role === 'student' && (can('viewProgress') ? (data ? <StudentHome student={rows.find(row => normalizeLogin(row.login) === studentLogin) ?? null} lang={lang} cohortRows={rows} interventions={interventions.filter(item => rows.find(row => row.studentId === item.studentId && normalizeLogin(row.login) === studentLogin))} accounts={accounts} mentors={mentorAccounts} viewer={session} onOpenProfile={openInterventionAuthor} activeTab={overviewTab} onActiveTabChange={setOverviewTab} /> : <section className="table-panel"><p>{rtl ? 'جارٍ تحميل سجل 01Edu.' : 'Loading the 01Edu record.'}</p></section>) : <NoAccess lang={lang} />)}
-        {section === 'overview' && session.role === 'mentor' && (can('viewProgress') ? (can('viewCohort') ? <div className="mentor-dashboard-sections"><OverviewSectionTabs label={rtl ? 'أقسام النظرة العامة' : 'Overview sections'} active={overviewTab} onChange={setOverviewTab} items={overviewSidebarItems} />{overviewTab === 'summary' && <OverviewPanel rows={visibleRows} accounts={accounts} lang={lang} onSelect={setSelectedStudent} labels={t} />}{overviewTab === 'learning' && <MentorAnalytics rows={visibleRows} interventions={can('manageInterventions') ? interventions.filter(item => visibleRows.some(student => student.studentId === item.studentId)) : []} lang={lang} onSelect={setSelectedStudent} comparisonRows={rows} accounts={accounts} mentors={mentorAccounts} includeProjects={false} />}{overviewTab === 'projects' && <ProjectProgress rows={rows} accounts={accounts} mentors={mentorAccounts} lang={lang} view="cohort" onSelectStudent={setSelectedStudent} />}</div> : <NoAccess lang={lang} />) : <NoAccess lang={lang}/>) }
-        {(isManager || (session.role === 'mentor' && can('viewCohort'))) && section === 'students' && <section className="table-panel"><div className="table-heading"><div><h2>{t.students}</h2><p>{rtl ? 'تابع نشاط الطلاب ومستوى تقدمهم.' : 'Track student activity and learning pace.'}</p></div><span className="cohort-pill"><span />{data?.cohortName ?? '01 Coding · Cohort 2'}</span></div><div className="filter-bar"><label className="search-box"><span>⌕</span><input ref={searchInput} value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} /><kbd>Ctrl K</kbd></label><select value={status} onChange={e => setStatus(e.target.value)} aria-label={t.status}><option value="ALL">{t.all}</option>{statuses.map(s => <option key={s} value={s}>{statusNames[lang][s]}</option>)}</select><select value={month} onChange={e => setMonth(e.target.value)} aria-label={t.month}><option value="ALL">{t.month}: {rtl ? 'الكل' : 'All'}</option>{[...new Set(visibleRows.map(s => s.curriculumMonth).filter(m => m > 0))].sort((a, b) => a - b).map(m => <option key={m} value={m}>{rtl ? `الشهر ${m}` : `Month ${m}`}</option>)}</select>{(search || status !== 'ALL' || month !== 'ALL') && <button className="clear-filters" onClick={() => { setSearch(''); setStatus('ALL'); setMonth('ALL') ;}}>{t.clear}</button>}</div>
-          {error ? <div className="state-card error-state"><div className="state-icon">!</div><h3>{rtl ? 'تعذر تحميل الطلاب' : 'Could not load students'}</h3><p>{error}</p><button className="primary-button" onClick={() => setRetry(x => x + 1)}>{t.retry}</button></div> : !data ? <div className="state-card"><div className="spinner" /><p>{t.loading}</p></div> : <div className="table-scroll"><table><thead><tr><th>{t.student}</th><th>{t.enrolled}</th><th>{t.days}</th><th>{t.month}</th><th>{t.level}</th><th>{t.target}</th><th>{t.gap}</th><th>{t.status}</th><th /></tr></thead><tbody>{filtered.map(s => <StudentRow key={s.studentId} s={s} accounts={accounts} lang={lang} onSelect={setSelectedStudent} />)}{filtered.length === 0 && <tr><td colSpan={9}><div className="empty-state"><span>⌕</span><b>{usingLiveApi && data.students.length === 0 ? (rtl ? 'لا يوجد طلاب محمّلون من 01Edu. القائمة التجريبية غير مستخدمة.' : 'No students are loaded from 01Edu. The demo list is not being used.') : t.empty}</b>{(search || status !== 'ALL' || month !== 'ALL') && <button onClick={() => { setSearch(''); setStatus('ALL'); setMonth('ALL') ;}}>{t.clear}</button>}</div></td></tr>}</tbody></table></div>}
-          <footer className="table-footer"><span>{data ? `${rtl ? 'عرض' : 'Showing'} ${filtered.length} ${rtl ? 'من' : 'of'} ${visibleRows.length} ${rtl ? 'طلاب' : 'students'}` : ' '}</span><span>{t.updated}: {todayLabel}</span></footer></section>}
-
-        {(isManager || (session.role === 'mentor' && can('manageInterventions'))) && section === 'interventions' && <section className="table-panel feature-panel"><div className="table-heading"><div><h2>{t.interventions}</h2><p>{followUpHint}</p></div><button className="primary-button" disabled={noStudentsToFollowUp} onClick={() => setShowInterventionForm(open => !open)}>{showInterventionForm && !noStudentsToFollowUp ? t.cancel : `＋ ${t.addIntervention}`}</button></div>{noStudentsToFollowUp && <p className="state-card followup-no-students" role="note">{rtl ? 'لا يوجد طلاب مسندون إليك بعد. اطلب من المدير إسناد طلاب قبل كتابة المتابعات.' : 'You have no assigned students yet. Ask a manager to assign students before writing follow-ups.'}</p>}{showInterventionForm && !noStudentsToFollowUp && <form className="intervention-form" onSubmit={saveIntervention}><label>{t.student}<select value={interventionStudent} onChange={e => setInterventionStudent(e.target.value)} required><option value="">{t.chooseStudent}</option>{visibleInterventionRows.map(student => <option key={student.studentId} value={student.studentId}>{student.displayName || student.login}</option>)}</select></label><label>{t.note}<textarea ref={interventionTextarea} value={interventionNote} onChange={e => setInterventionNote(e.target.value)} placeholder={t.enterNote} rows={3} required /></label><button className="primary-button" type="submit">{t.save}</button></form>}{showInterventionForm && selectedInterventionStudent && <StudentContactDetails student={selectedInterventionStudent} accounts={accounts} lang={lang} />}{visibleInterventions.length ? <div className="intervention-list">{visibleInterventions.map(item => { const student = visibleInterventionRows.find(s => s.studentId === item.studentId); return <article className="intervention-item" key={item.id}>{student ? <StudentAvatar student={student} accounts={accounts} /> : <span className="avatar student-avatar avatar-2">?</span>}<div><b>{student?.displayName || (rtl ? 'طالب غير معروف' : 'Unknown student')}</b><p>{item.note}</p><small>{dateText(item.createdAt.slice(0, 10), lang)}</small></div>{canDeleteFollowUp(item) && <button className="row-more" aria-label="Delete follow-up" title="Delete follow-up" onClick={() => removeFollowUp(item)}>×</button>}</article> ;})}</div> : <div className="empty-state"><b>{t.noInterventions}</b></div>}</section>}
-
-
-        {(isManager || (session.role === 'mentor' && can('manageStudents'))) && section === 'manage' && <ManageStudents rows={isManager || staffSeesAll ? learnerRows : assignedRows} accounts={accounts} lang={lang} onEdit={student => { setEditingStudent(student); setStudentFormOpen(true) ;}} onDelete={student => { if (window.confirm(rtl ? `حذف ${student.displayName || student.login} من العرض التجريبي مع حسابه المرتبط؟` : `Remove ${student.displayName || student.login} and the linked account from this demo?`)) removeStudentRecord(student) ;}} />}
-        {!usingLiveApi && (isManager || (session.role === 'mentor' && can('manageAccounts'))) && section === 'accounts' && <AccountManager accounts={accountRows} studentRecords={unlinkedStudentRecords} mode={isManager ? 'manager' : 'mentor'} lang={lang} capacityLimit={session.role === 'mentor' ? (session.capacityLimit ?? demoMentor.capacityLimit) : undefined} capacityUsed={assignedRows.length} onSave={updateAccount} onDelete={account => { if (account.id === session.id) { setMessage(rtl ? 'لا يمكن حذف الحساب المستخدم حاليًا.' : 'You cannot remove the account you are using.'); return ;} if (window.confirm(rtl ? `حذف حساب ${account.name}؟ سيتم حذف سجل الطالب المرتبط أيضًا.` : `Delete ${account.name}’s account and linked student record?`)) removeAccount(account) ;}} onOpenProfile={openAccountProfile} onOpenWorkspace={openMentorWorkspace} />}
-        {section === 'team' && isManager && (viewedMentor ? <MentorWorkspaceView mentor={viewedMentor} students={rows} accounts={accounts} mentors={mentorAccounts} interventions={interventions} lang={lang} kpis={onTrackKpis} onSelectStudent={setSelectedStudent} onBack={() => setViewedMentorId(null)} onActAs={() => beginActingAsMentor(viewedMentor)} /> : <TeamManagement mentors={mentorAccounts} rows={learnerRows} lang={lang} onUpdate={updateMentor} onAssign={assignStudent} />)}
-        {section === 'team' && session.role === 'mentor' && (viewedMentor ? <MentorWorkspaceView mentor={viewedMentor} students={rows} accounts={accounts} mentors={mentorAccounts} interventions={interventions} lang={lang} kpis={onTrackKpis} onSelectStudent={setSelectedStudent} onBack={() => setViewedMentorId(null)} onActAs={() => beginActingAsMentor(viewedMentor)} /> : <ManagerOverview mentors={mentorAccounts} rows={learnerRows} interventions={interventions} lang={lang} kpis={onTrackKpis} onOpenMentor={openMentorWorkspace} />)}
-        {section === 'member-profile' && <div className="member-profile-back"><button type="button" onClick={() => nav(memberProfileReturnSection === 'member-profile' ? 'hierarchy' : memberProfileReturnSection)}><span aria-hidden="true">←</span>{rtl ? 'العودة' : `Back to ${memberProfileReturnLabel}`}</button></div>}
-        {(section === 'profile' || section === 'member-profile') && <ProfilePage key={viewedProfile.id} account={viewedProfile} viewer={session} lang={lang} onSave={saveProfile} readOnly={syntheticStudentProfile || readOnlyProfile} studentDetails={viewedStudentRecord}>{viewedProfile.role === 'student' && viewedStudentRecord && (session.role === 'mentor' || session.role === 'manager') && <StudentProfileInsights student={viewedStudentRecord} cohortRows={rows} accounts={accounts} mentors={mentorAccounts} interventions={interventions} lang={lang} />}</ProfilePage>}
-        {session.role !== 'student' && section === 'settings' && <section className="table-panel settings-panel"><SettingRow title={t.appearance} description={theme === 'light' ? (rtl ? 'الوضع الفاتح' : 'Light theme') : (rtl ? 'الوضع الداكن' : 'Dark theme')} action={<button className="setting-action" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? '☾' : '☀'} {rtl ? 'تغيير' : 'Change'}</button>} /><SettingRow title={t.dataSource} description={sourceDescription} action={<span className="demo-tag"><span />{sourceLabel}</span>} /><SettingRow title={rtl ? 'تسجيل الخروج' : 'Account session'} description={rtl ? `تم تسجيل الدخول باسم ${session.name} (${session.email})` : `Signed in as ${session.name} (${session.email})`} action={<button className="topbar-signout-btn" onClick={onSignOut}>{rtl ? 'تسجيل الخروج' : 'Log out'}</button>} /><div className="settings-note">{rtl ? 'ربط الحساب والصلاحيات والبيانات الحقيقية سيتم من خلال خدمات الخلفية عند تجهيز الـAPI.' : 'Authentication, access control, and live records will be provided by the backend API when its contract is ready.'}</div></section>}
-
-        <div className="page-footer"><span>© 2026 Nextera Pulse</span><span>{rtl ? 'ذكاء التعلّم للمنتورز' : 'Learning intelligence for mentors'}</span></div>
-      </section>
-    </main>
-    {selectedStudent && session.role !== 'student' && <StudentDetails student={selectedStudent} cohortName={data?.cohortName ?? '01 Coding - Second Cohort'} accounts={accounts} lang={lang} interventions={interventions} canTakeAction={viewedMentor ? false : can('manageInterventions')} onTakeAction={openStudentIntervention} onViewProfile={openStudentProfile} onClose={() => setSelectedStudent(null)} />}
-    {studentFormOpen && editingStudent && session.role !== 'student' && <StudentForm student={editingStudent} lang={lang} onSave={saveStudent} onClose={() => { setStudentFormOpen(false); setEditingStudent(null) ;}} />}
-    {helpOpen && <InfoDialog title={t.helpTitle} body={t.helpDescription} onClose={() => setHelpOpen(false)} closeLabel={t.close} />}
-    {message && <div className={`toast-message${messageIsError ? ' toast-error' : ''}`} role={messageIsError ? 'alert' : 'status'}>{message}</div>}
-  </div>;
+      {mobileMoreOpen && isManager && (
+        <nav className="mobile-more-menu" aria-label={rtl ? "روابط إضافية" : "More pages"}>
+          {[
+            { label: t.team, icon: <UsersRound size={17} />, target: "team" as const },
+            { label: t.manage, icon: <UserRoundPlus size={17} />, target: "manage" as const },
+            { label: t.settings, icon: <SettingsIcon size={17} />, target: "settings" as const },
+          ].map((item) => (
+            <button key={item.target} type="button" onClick={() => { nav(item.target); setMobileMoreOpen(false); }}>
+              {item.icon}<span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+      {selectedStudent && session.role !== "student" && (
+        <StudentDetails
+          student={selectedStudent}
+          accounts={accounts}
+          lang={lang}
+          interventions={interventions}
+          canTakeAction={viewedMentor ? false : can("manageInterventions")}
+          onTakeAction={openStudentIntervention}
+          onViewProfile={openStudentProfile}
+          onClose={() => setSelectedStudent(null)}
+        />
+      )}
+      {studentFormOpen && editingStudent && session.role !== "student" && (
+        <StudentForm
+          student={editingStudent}
+          lang={lang}
+          onSave={saveStudent}
+          onClose={() => {
+            setStudentFormOpen(false);
+            setEditingStudent(null);
+          }}
+        />
+      )}
+      {message && (
+        <div className="toast-message" role="status">
+          {message}
+        </div>
+      )}
+    </div>
+  );
 }
-
-
-
-
-

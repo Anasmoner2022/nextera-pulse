@@ -30,7 +30,7 @@
   border-radius:10px;
   background:#ffffffb8;
   color:#526963;
-  font-size:17px;
+  font-size:var(--text-lg);
   transition:background .2s,border-color .2s,transform .2s,color .2s
 }
 .auth-theme-toggle:hover {
@@ -58,7 +58,7 @@
   letter-spacing:2px
 }
 .auth-brand small {
-  font-size:8px;
+  font-size:var(--text-xs);
   color:#82918f;
   letter-spacing:1.5px
 }
@@ -105,7 +105,7 @@
   border:1px solid #dcece5;
   border-radius:30px;
   color:#4d7770;
-  font-size:9px;
+  font-size:var(--text-xs);
   letter-spacing:1px;
   background:#ffffffaa
 }
@@ -123,7 +123,7 @@
   max-width:620px
 }
 .auth-story>p {
-  font-size:15px;
+  font-size:var(--text-md);
   line-height:1.8;
   color:#71817e;
   max-width:440px
@@ -153,7 +153,7 @@
   position:absolute;
   right:4px;
   top:4px;
-  font-size:12px;
+  font-size:var(--text-sm);
   color:#eaffd9
 }
 .orbit-core code {
@@ -221,10 +221,10 @@
   top:25px;
   right:27px;
   color:#41b99f;
-  font-size:19px
+  font-size:var(--text-lg)
 }
 .auth-card .eyebrow {
-  font-size:9px;
+  font-size:var(--text-xs);
   letter-spacing:1.3px
 }
 .auth-card h2 {
@@ -232,7 +232,7 @@
   margin:9px 0
 }
 .auth-card>p {
-  font-size:11px;
+  font-size:var(--text-xs);
   color:#879491;
   margin:0 0 18px
 }
@@ -251,7 +251,7 @@
   color:#71817e;
   border-radius:7px;
   padding:9px;
-  font-size:10px
+  font-size:var(--text-xs)
 }
 .auth-tabs button.selected,.role-switch button.selected {
   background:white;
@@ -273,7 +273,7 @@
 .auth-form label,.admin-form label {
   display:grid;
   gap:6px;
-  font-size:9px;
+  font-size:var(--text-xs);
   font-weight:600;
   color:#62716e
 }
@@ -285,7 +285,7 @@
   background:white;
   color:#243532;
   outline:none;
-  font-size:11px
+  font-size:var(--text-xs)
 }
 .auth-form input:focus,.admin-form input:focus,.admin-form select:focus {
   border-color:#68cdb3;
@@ -294,12 +294,12 @@
 .auth-submit {
   height:41px;
   margin-top:3px;
-  font-size:11px;
+  font-size:var(--text-xs);
   box-shadow:0 8px 17px #2eae9650
 }
 .auth-submit span {
   float:right;
-  font-size:16px;
+  font-size:var(--text-md);
   line-height:12px
 }
 .auth-divider {
@@ -307,7 +307,7 @@
   align-items:center;
   gap:10px;
   color:#aab6b2;
-  font-size:8px;
+  font-size:var(--text-xs);
   margin:15px 0
 }
 .auth-divider:before,.auth-divider:after {
@@ -327,7 +327,7 @@
   border-radius:10px;
   background:linear-gradient(180deg,#fff,#f8fbf9);
   color:#4f5e5a;
-  font-size:11px;
+  font-size:var(--text-xs);
   font-weight:650;
   box-shadow:0 3px 10px #244b4b08;
   transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease
@@ -358,7 +358,7 @@
   border:0;
   background:transparent;
   color:#168b79;
-  font-size:10px;
+  font-size:var(--text-xs);
   font-weight:600
 }
 .auth-legal {
@@ -366,7 +366,7 @@
   margin:11px auto 0;
   text-align:center;
   color:#9aa7a3;
-  font-size:8px;
+  font-size:var(--text-xs);
   line-height:1.6
 }
 .auth-notice {
@@ -375,7 +375,7 @@
   border:1px solid #d9eee5;
   border-radius:7px;
   color:#52786d!important;
-  font-size:9px!important;
+  font-size:var(--text-xs)!important;
   margin:10px 0 0!important
 }
 .auth-footer {
@@ -385,7 +385,7 @@
   justify-content:space-between;
   padding:18px 0;
   color:#9aa7a3;
-  font-size:9px
+  font-size:var(--text-xs)
 }
 .manage-panel {
   overflow:hidden
@@ -407,10 +407,10 @@
   min-width:0
 }
 .manage-identity b {
-  font-size:11px
+  font-size:var(--text-xs)
 }
 .manage-identity small {
-  font-size:9px;
+  font-size:var(--text-xs);
   color:var(--muted)
 }
 .manage-actions {
@@ -446,7 +446,7 @@
   margin:10px 35px 7px 0
 }
 .student-form-card>p {
-  font-size:10px;
+  font-size:var(--text-xs);
   color:var(--muted);
   margin:0 0 20px
 }
@@ -460,7 +460,7 @@
 .admin-form input,.admin-form select {
   background:var(--surface);
   color:var(--text);
-  font-size:11px
+  font-size:var(--text-xs)
 }
 .form-two {
   display:grid;
@@ -472,7 +472,7 @@
   border-radius:8px;
   background:var(--soft);
   color:var(--muted);
-  font-size:9px;
+  font-size:var(--text-xs);
   line-height:1.6
 }
 .form-actions {
@@ -490,7 +490,7 @@
   margin:10px 0
 }
 .student-welcome p {
-  font-size:11px;
+  font-size:var(--text-xs);
   color:var(--muted)
 }
 .student-home {
@@ -532,10 +532,10 @@
   letter-spacing:1px
 }
 .student-progress>div:nth-child(2) b {
-  font-size:12px
+  font-size:var(--text-sm)
 }
 .student-progress>div:nth-child(2) p {
-  font-size:10px;
+  font-size:var(--text-xs);
   color:#73847f;
   line-height:1.6
 }
@@ -559,18 +559,18 @@ html[dir=rtl] .student-metrics>div {
   border:0
 }
 .student-metrics small {
-  font-size:9px;
+  font-size:var(--text-xs);
   color:var(--muted)
 }
 .student-metrics b {
-  font-size:11px
+  font-size:var(--text-xs)
 }
 .student-home>h2 {
-  font-size:17px
+  font-size:var(--text-lg)
 }
 .student-home>p {
   color:var(--muted);
-  font-size:11px
+  font-size:var(--text-xs)
 }
 @keyframes auth-rise {
   from {
@@ -676,7 +676,7 @@ html[data-theme=dark] .student-progress {
     gap:25px
   }
 .auth-story h1 {
-    font-size:42px
+    font-size:var(--text-kpi)
   }
 .story-orbit {
     transform:scale(.82);
@@ -705,12 +705,12 @@ html[data-theme=dark] .student-progress {
     max-width:none
   }
 .auth-story h1 {
-    font-size:36px;
+    font-size:var(--text-kpi);
     letter-spacing:-1.4px;
     margin:15px 0 8px
   }
 .auth-story>p {
-    font-size:12px;
+    font-size:var(--text-sm);
     max-width:410px;
     margin:0
   }
@@ -721,10 +721,10 @@ html[data-theme=dark] .student-progress {
     padding:23px 19px
   }
 .auth-card h2 {
-    font-size:21px
+    font-size:var(--text-lg)
   }
 .auth-footer {
-    font-size:8px
+    font-size:var(--text-xs)
   }
 .manage-row {
     gap:8px;
