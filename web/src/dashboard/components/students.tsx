@@ -116,13 +116,6 @@ export function StudentRow({
           </span>
         </div>
       </td>
-      <td>{dateText(s.enrolledAt, lang)}</td>
-      <td>
-        <span className="days-cell">
-          {s.activeAcademicDays}
-          <small>{lang === "ar" ? "يوم" : "days"}</small>
-        </span>
-      </td>
       <td>
         {s.curriculumMonth > 0
           ? lang === "ar"

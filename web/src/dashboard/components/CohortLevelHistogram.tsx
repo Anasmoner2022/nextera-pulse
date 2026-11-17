@@ -22,27 +22,34 @@ export function CohortLevelHistogram({
   onSelectStudent?: (student: StudentPaceRow) => void;
 }) {
   const ar = lang === "ar";
-  const levels = useMemo(
-    () =>
-      [...new Set(rows.map((row) => row.actualLevel))].sort((a, b) => a - b),
-    [rows],
-  );
-  const initialLevel =
-    rows.find((row) => row.studentId === highlightedStudentId)?.actualLevel ??
-    levels[0] ??
-    null;
-  const [selectedLevel, setSelectedLevel] = useState<number | null>(
-    initialLevel,
-  );
-  const visibleRows =
-    selectedLevel === null
-      ? rows
-      : rows.filter((row) => row.actualLevel === selectedLevel);
+  const buckets = useMemo(() => {
+    const levels = [...new Set(rows.map((row) => row.actualLevel))].sort((a, b) => a - b);
+    const min = levels[0] ?? 0;
+    const max = levels.at(-1) ?? min;
+    const step = levels.length > 16 ? Math.max(1, Math.ceil((max - min + 1) / 16)) : 1;
+    const grouped = new Map<string, { label: string; rows: StudentPaceRow[] }>();
+    for (const row of rows) {
+      const start = Math.floor((row.actualLevel - min) / step) * step + min;
+      const end = start + step - 1;
+      const key = `${start}:${end}`;
+      const bucket = grouped.get(key) ?? { label: step === 1 ? String(start) : `${start}–${end}`, rows: [] };
+      bucket.rows.push(row);
+      grouped.set(key, bucket);
+    }
+    return [...grouped.entries()].map(([key, bucket]) => ({ key, ...bucket }));
+  }, [rows]);
+  const highlightedLevel = rows.find((row) => row.studentId === highlightedStudentId)?.actualLevel;
+  const [selectedBucket, setSelectedBucket] = useState<string | null>(() => {
+    const bucket = buckets.find((item) => item.rows.some((row) => row.actualLevel === highlightedLevel));
+    return bucket?.key ?? buckets[0]?.key ?? null;
+  });
+  const currentBucket = buckets.find((bucket) => bucket.key === selectedBucket) ?? buckets[0];
+  const visibleRows = currentBucket?.rows ?? rows;
+  const [showAll, setShowAll] = useState(false);
+  const shownRows = showAll || visibleRows.length <= 25 ? visibleRows : visibleRows.slice(0, 25);
   const maxCount = Math.max(
     1,
-    ...levels.map(
-      (level) => rows.filter((row) => row.actualLevel === level).length,
-    ),
+    ...buckets.map((bucket) => bucket.rows.length),
   );
 
   return (
@@ -69,7 +76,7 @@ export function CohortLevelHistogram({
           {ar ? "طالب" : rows.length === 1 ? "student" : "students"}
         </span>
       </header>
-      {levels.length ? (
+      {buckets.length ? (
         <>
           <div
             className="cohort-histogram-chart"
@@ -78,19 +85,17 @@ export function CohortLevelHistogram({
               ar ? "أعمدة توزيع المستويات" : "Level distribution bars"
             }
           >
-            {levels.map((level) => {
-              const count = rows.filter(
-                (row) => row.actualLevel === level,
-              ).length;
-              const selected = selectedLevel === level;
+            {buckets.map((bucket) => {
+              const count = bucket.rows.length;
+              const selected = currentBucket?.key === bucket.key;
               return (
                 <button
                   type="button"
                   className={`cohort-level-bar${selected ? " selected" : ""}`}
-                  key={level}
+                  key={bucket.key}
                   aria-pressed={selected}
-                  aria-label={`${ar ? "المستوى" : "Level"} ${level}: ${count} ${ar ? "طالب" : count === 1 ? "student" : "students"}`}
-                  onClick={() => setSelectedLevel(selected ? null : level)}
+                  aria-label={`${ar ? "المستوى" : "Level"} ${bucket.label}: ${count} ${ar ? "طالب" : count === 1 ? "student" : "students"}`}
+                  onClick={() => { setSelectedBucket(bucket.key); setShowAll(false); }}
                 >
                   <span className="cohort-level-count">{count}</span>
                   <span className="cohort-level-bar-track">
@@ -100,7 +105,7 @@ export function CohortLevelHistogram({
                       }}
                     />
                   </span>
-                  <b>{level}</b>
+                  <b>{bucket.label}</b>
                 </button>
               );
             })}
@@ -108,11 +113,7 @@ export function CohortLevelHistogram({
           <div className="cohort-level-roster" aria-live="polite">
             <div className="cohort-level-roster-heading">
               <b>
-                {selectedLevel === null
-                  ? ar
-                    ? "كل الطلاب"
-                    : "All students"
-                  : `${ar ? "المستوى" : "Level"} ${selectedLevel}`}
+                {currentBucket ? `${ar ? "المستوى" : "Level"} ${currentBucket.label}` : ar ? "كل الطلاب" : "All students"}
               </b>
               <span>
                 {visibleRows.length}{" "}
@@ -124,7 +125,7 @@ export function CohortLevelHistogram({
               </span>
             </div>
             <div className="cohort-level-roster-grid">
-              {visibleRows.map((student) => {
+              {shownRows.map((student) => {
                 const mentor = findAssignedMentor(student, accounts, mentors);
                 const content = (
                   <>
@@ -162,6 +163,7 @@ export function CohortLevelHistogram({
                 );
               })}
             </div>
+            {visibleRows.length > 25 && <button className="cohort-level-view-all" type="button" onClick={() => setShowAll((value) => !value)}>{showAll ? (ar ? 'عرض أول 25' : 'Show first 25') : `${ar ? 'عرض الكل' : 'View all'} ${visibleRows.length}`}</button>}
           </div>
         </>
       ) : (

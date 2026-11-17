@@ -1,6 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
+  Bell,
+  ClipboardList,
+  LayoutDashboard,
+  Layers3,
+  LogOut,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  Settings as SettingsIcon,
+  ShieldCheck,
+  Sun,
+  UsersRound,
+  UserRoundPlus,
+} from "lucide-react";
+import {
   assignMentor,
   createFollowUp,
   deleteFollowUp,
@@ -50,7 +66,6 @@ import {
   StudentHome,
   StudentProfileInsights,
   StudentRow,
-  TeamHierarchy,
   TeamManagement,
 } from "./components";
 import {
@@ -62,7 +77,6 @@ import {
 } from "./config";
 import type { Intervention, Language, Section } from "./config";
 import { useOnTrackKpis } from "./onTrack";
-import "./hierarchy.css";
 import "./student-profile-insights.css";
 
 export function Dashboard({
@@ -89,9 +103,9 @@ export function Dashboard({
   const [today, setToday] = useState(() => new Date());
   const [section, setSection] = useState<Section>("overview");
   const [memberProfileReturnSection, setMemberProfileReturnSection] =
-    useState<Section>("hierarchy");
+    useState<Section>("students");
   const [overviewTab, setOverviewTab] = useState("summary");
-  const [overviewSubnavOpen, setOverviewSubnavOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [accounts, setAccounts] = useState<PulseAccount[]>(readAccounts);
   const [profileAccountId, setProfileAccountId] = useState(signedInSession.id);
   const [viewedMentorId, setViewedMentorId] = useState<string | null>(null);
@@ -107,6 +121,8 @@ export function Dashboard({
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
   const [month, setMonth] = useState("ALL");
+  const [sourceStatus, setSourceStatus] = useState("ALL");
+  const [studentPage, setStudentPage] = useState(1);
   const [retry, setRetry] = useState(0);
   const [selectedStudent, setSelectedStudent] = useState<StudentPaceRow | null>(
     null,
@@ -563,10 +579,14 @@ export function Dashboard({
               .toLowerCase()
               .includes(search.trim().toLowerCase())) &&
           (status === "ALL" || s.paceStatus === status) &&
-          (month === "ALL" || String(s.curriculumMonth) === month),
+          (month === "ALL" || String(s.curriculumMonth) === month) &&
+          (sourceStatus === "ALL" || String(s.sourceStatus) === sourceStatus),
       ),
-    [visibleRows, search, status, month],
+    [visibleRows, search, status, month, sourceStatus],
   );
+  const studentPageCount = Math.max(1, Math.ceil(filtered.length / 25));
+  const pageRows = filtered.slice((studentPage - 1) * 25, studentPage * 25);
+  useEffect(() => { setStudentPage(1); }, [search, status, month, sourceStatus]);
   const activeKpiRows = visibleRows.filter(isInActiveKpiPopulation);
   const count = (keys: PaceStatus[]) =>
     activeKpiRows.filter((s) => keys.includes(s.paceStatus)).length;
@@ -638,11 +658,6 @@ export function Dashboard({
   };
   const nav = (next: Section) => {
     setSection(next);
-    if (next === "profile") {
-      setProfileAccountId(session.id);
-      setProfileStudent(null);
-      setReadOnlyProfile(false);
-    }
     if (next !== "team") setViewedMentorId(null);
     setNotificationsOpen(false);
   };
@@ -673,7 +688,7 @@ export function Dashboard({
     setSection("overview");
   };
   const openAccountProfile = (account: PulseAccount) => {
-    setMemberProfileReturnSection(section);
+    setMemberProfileReturnSection(section === "member-profile" ? "students" : section);
     setProfileStudent(null);
     setReadOnlyProfile(false);
     setProfileAccountId(account.id);
@@ -701,27 +716,6 @@ export function Dashboard({
     setSelectedStudent(null);
     setSection("member-profile");
     setNotificationsOpen(false);
-  };
-  const openHierarchyAccount = (account: PulseAccount) => {
-    setMemberProfileReturnSection("hierarchy");
-    setProfileStudent(null);
-    setReadOnlyProfile(account.id !== session.id);
-    setProfileAccountId(account.id);
-    setSection("member-profile");
-    setNotificationsOpen(false);
-    setViewedMentorId(null);
-  };
-  const openHierarchyStudent = (
-    student: StudentPaceRow,
-    account: PulseAccount,
-  ) => {
-    setMemberProfileReturnSection("hierarchy");
-    setProfileStudent(student);
-    setReadOnlyProfile(account.id !== session.id);
-    setProfileAccountId(account.id);
-    setSection("member-profile");
-    setNotificationsOpen(false);
-    setViewedMentorId(null);
   };
   const openInterventionAuthor = (account: PulseAccount) => {
     openAccountProfile(account);
@@ -1313,22 +1307,14 @@ export function Dashboard({
           : section === "member-profile"
             ? viewedProfile.name
             : t[section];
-  const memberProfileReturnLabel =
-    memberProfileReturnSection === "member-profile"
-      ? t.hierarchy
-      : t[memberProfileReturnSection];
   const pageSubtitle = studentOverview
     ? rtl
       ? "تابع مستواك ونشاطك ومتابعات فريقك من مكان واحد."
       : "Track your level, activity, and team follow-ups in one place."
-    : section === "hierarchy"
-      ? rtl
-        ? "خريطة تفاعلية لعلاقات الفريق والطلاب."
-        : "An interactive map of team and student relationships."
-      : section === "member-profile"
+    : section === "member-profile"
         ? rtl
           ? "عرض تفاصيل الملف الشخصي."
-          : `${viewedProfile.role === "manager" ? "Program manager" : viewedProfile.role === "mentor" ? "Mentor" : "Student"} profile · Back to ${memberProfileReturnLabel}.`
+        : `${viewedProfile.role === "manager" ? "Program manager" : viewedProfile.role === "mentor" ? "Mentor" : "Student"} profile.`
         : section === "team" && viewedMentor
           ? rtl
             ? "راجع مساحة المنتور وابدأ العمل بصلاحياته."
@@ -1377,16 +1363,16 @@ export function Dashboard({
   const overviewSidebarItems =
     session.role === "student"
       ? [
-          { id: "progress", icon: "↗", label: rtl ? "تقدمي" : "My progress" },
+          { id: "progress", icon: <LayoutDashboard size={16} />, label: rtl ? "تقدمي" : "My progress" },
           {
             id: "cohort",
-            icon: "⌁",
+            icon: <UsersRound size={16} />,
             label: rtl ? "مقارنة الكوهورت" : "Cohort comparison",
           },
-          { id: "projects", icon: "◫", label: rtl ? "مشاريعي" : "My projects" },
+          { id: "projects", icon: <ClipboardList size={16} />, label: rtl ? "مشاريعي" : "My projects" },
           {
             id: "followups",
-            icon: "▤",
+            icon: <ClipboardList size={16} />,
             label: rtl ? "المتابعات" : "Follow-ups",
           },
         ]
@@ -1394,15 +1380,15 @@ export function Dashboard({
         ? [
             {
               id: "summary",
-              icon: "▦",
+              icon: <LayoutDashboard size={16} />,
               label: rtl ? "ملخص الكوهورت" : "Cohort snapshot",
             },
             {
               id: "learning",
-              icon: "⌁",
+              icon: <UsersRound size={16} />,
               label: rtl ? "تحليلات الطلاب" : "Student analytics",
             },
-            { id: "projects", icon: "◫", label: rtl ? "المشاريع" : "Projects" },
+            { id: "projects", icon: <ClipboardList size={16} />, label: rtl ? "المشاريع" : "Projects" },
           ]
         : [];
 
@@ -1410,53 +1396,63 @@ export function Dashboard({
     session.role === "student"
       ? [
           {
-            label: "Pace",
-            icon: "↗",
+            label: rtl ? "تقدمي" : "My pace",
+            icon: <LayoutDashboard size={18} />,
+            active: () => section === "overview" && overviewTab === "progress",
             action: () => {
               setOverviewTab("progress");
               nav("overview");
             },
           },
           {
-            label: "Path",
-            icon: "◫",
+            label: rtl ? "مساري" : "My path",
+            icon: <UsersRound size={18} />,
+            active: () => section === "overview" && overviewTab === "cohort",
+            action: () => {
+              setOverviewTab("cohort");
+              nav("overview");
+            },
+          },
+          {
+            label: rtl ? "مشاريعي" : "Project",
+            icon: <ClipboardList size={18} />,
+            active: () => section === "overview" && overviewTab === "projects",
             action: () => {
               setOverviewTab("projects");
               nav("overview");
             },
           },
           {
-            label: "Notes",
-            icon: "▤",
+            label: rtl ? "ملاحظات المنتور" : "Mentor notes",
+            icon: <ClipboardList size={18} />,
+            active: () => section === "overview" && overviewTab === "followups",
             action: () => {
               setOverviewTab("followups");
               nav("overview");
             },
           },
-          { label: "Team", icon: "⌘", action: () => nav("hierarchy") },
         ]
       : [
-          { label: "Overview", icon: "▦", action: () => nav("overview") },
+          { label: rtl ? "نظرة عامة" : "Overview", icon: <LayoutDashboard size={18} />, active: () => section === "overview", action: () => nav("overview") },
           ...(isManager || can("viewCohort")
-            ? [{ label: "Students", icon: "♙", action: () => nav("students") }]
+            ? [{ label: "Students", icon: <UsersRound size={18} />, active: () => section === "students", action: () => nav("students") }]
             : []),
           ...(isManager || can("manageInterventions")
             ? [
                 {
-                  label: "Notes",
-                  icon: "↗",
+                  label: rtl ? "المتابعات" : "Follow-ups",
+                  icon: <ClipboardList size={18} />,
+                  active: () => section === "interventions",
                   action: () => nav("interventions"),
                 },
               ]
             : []),
-          ...(isManager || can("manageStudents")
-            ? [{ label: "Manage", icon: "＋", action: () => nav("manage") }]
-            : []),
-          ...(isManager || can("manageAccounts")
-            ? [{ label: "Accounts", icon: "♧", action: () => nav("accounts") }]
-            : []),
-          { label: "Team", icon: "⌘", action: () => nav("hierarchy") },
-          { label: "Settings", icon: "⚙", action: () => nav("settings") },
+          ...(isManager
+            ? [{ label: rtl ? "المزيد" : "More", icon: <SettingsIcon size={18} />, active: () => ["team", "manage", "settings"].includes(section), action: () => setMobileMoreOpen((open) => !open) }]
+            : [
+                ...(can("manageStudents") ? [{ label: rtl ? "إدارة" : "Manage", icon: <UserRoundPlus size={18} />, active: () => section === "manage", action: () => nav("manage") }] : []),
+                { label: rtl ? "الإعدادات" : "Settings", icon: <SettingsIcon size={18} />, active: () => section === "settings", action: () => nav("settings") },
+              ]),
         ];
 
   // Render the shared navigation shell, role-specific workspace, and overlays.
@@ -1465,14 +1461,6 @@ export function Dashboard({
       className={`app-shell${sidebarHidden ? " sidebar-hidden" : ""}`}
       dir={rtl ? "rtl" : "ltr"}
     >
-      <div
-        className="brand-watermark brand-watermark-primary"
-        aria-hidden="true"
-      />
-      <div
-        className="brand-watermark brand-watermark-secondary"
-        aria-hidden="true"
-      />
       <aside className="sidebar">
         <div className="sidebar-head">
           <button
@@ -1494,17 +1482,6 @@ export function Dashboard({
               <small>STUDENT SUCCESS</small>
             </span>
           </button>
-          <button
-            className="sidebar-collapse"
-            type="button"
-            onClick={() => setSidebarHidden(true)}
-            aria-label="Hide sidebar"
-            title="Hide sidebar"
-          >
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <path d="M8.5 4.5h-2a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2M11 7.5l2.5 2.5-2.5 2.5M14.5 4.5v11" />
-            </svg>
-          </button>
         </div>
         <div className="workspace-label">
           {isManager
@@ -1519,7 +1496,7 @@ export function Dashboard({
         </div>
         <div className="cohort-card">
           <span className="cohort-icon" aria-hidden="true">
-            ◈
+            <Layers3 size={18} aria-hidden="true" />
           </span>
           <span>
             <small>{t.cohort}</small>
@@ -1528,83 +1505,11 @@ export function Dashboard({
         </div>
         <nav className="nav-list" aria-label="Main navigation">
           {(isManager || can("viewProgress")) && (
-            <>
-              {overviewSidebarItems.length > 0 ? (
-                <div
-                  className={`sidebar-overview-menu${overviewSubnavOpen ? " open" : ""}`}
-                >
-                  <button
-                    type="button"
-                    className={`nav-item overview-nav-item${section === "overview" ? " active" : ""}`}
-                    aria-expanded={overviewSubnavOpen}
-                    aria-controls="sidebar-overview-sections"
-                    onClick={() => {
-                      nav("overview");
-                      setOverviewSubnavOpen((value) => !value);
-                    }}
-                  >
-                    <span>▦</span>
-                    <span className="nav-label">{t.overview}</span>
-                    <span className="overview-nav-chevron" aria-hidden="true">
-                      <svg viewBox="0 0 16 16">
-                        <path d="m4 6 4 4 4-4" />
-                      </svg>
-                    </span>
-                  </button>
-                  {overviewSubnavOpen && (
-                    <div
-                      id="sidebar-overview-sections"
-                      className="sidebar-overview-subnav"
-                      aria-label={
-                        rtl ? "أقسام النظرة العامة" : "Overview sections"
-                      }
-                    >
-                      {overviewSidebarItems.map((item) => (
-                        <button
-                          type="button"
-                          key={item.id}
-                          title={item.label}
-                          className={
-                            section === "overview" && overviewTab === item.id
-                              ? "active"
-                              : ""
-                          }
-                          aria-current={
-                            section === "overview" && overviewTab === item.id
-                              ? "page"
-                              : undefined
-                          }
-                          onClick={() => {
-                            setOverviewTab(item.id);
-                            nav("overview");
-                          }}
-                        >
-                          <span>{item.icon}</span>
-                          <b>{item.label}</b>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <NavItem
-                  icon="▦"
-                  label={t.overview}
-                  active={section === "overview"}
-                  onClick={() => nav("overview")}
-                />
-              )}
-            </>
+            <NavItem icon={<LayoutDashboard size={18} />} label={t.overview} active={section === "overview"} onClick={() => nav("overview")} />
           )}
-          <NavItem
-            icon="⌘"
-            label={t.hierarchy}
-            active={section === "hierarchy" || section === "member-profile"}
-            onClick={() => nav("hierarchy")}
-          />
           {(isManager || (session.role === "mentor" && can("viewCohort"))) && (
             <NavItem
-              icon="♙"
+              icon={<UsersRound size={18} />}
               label={t.students}
               active={section === "students"}
               onClick={() => nav("students")}
@@ -1613,7 +1518,7 @@ export function Dashboard({
           {(isManager ||
             (session.role === "mentor" && can("manageInterventions"))) && (
             <NavItem
-              icon="↗"
+              icon={<ClipboardList size={18} />}
               label={t.interventions}
               active={section === "interventions"}
               onClick={() => nav("interventions")}
@@ -1622,7 +1527,7 @@ export function Dashboard({
           {(isManager ||
             (session.role === "mentor" && can("manageStudents"))) && (
             <NavItem
-              icon="＋"
+              icon={<UserRoundPlus size={18} />}
               label={t.manage}
               active={section === "manage"}
               onClick={() => nav("manage")}
@@ -1631,7 +1536,7 @@ export function Dashboard({
           {!usingLiveApi && (isManager ||
             (session.role === "mentor" && can("manageAccounts"))) && (
             <NavItem
-              icon="♧"
+              icon={<ShieldCheck size={18} />}
               label={t.accounts}
               active={section === "accounts"}
               onClick={() => nav("accounts")}
@@ -1639,7 +1544,7 @@ export function Dashboard({
           )}
           {(isManager || session.role === "mentor") && (
             <NavItem
-              icon="◉"
+              icon={<UsersRound size={18} />}
               label={t.team}
               active={section === "team"}
               onClick={() => nav("team")}
@@ -1647,7 +1552,7 @@ export function Dashboard({
           )}
           {session.role !== "student" && (
             <NavItem
-              icon="⚙"
+              icon={<SettingsIcon size={18} />}
               label={t.settings}
               active={section === "settings"}
               onClick={() => nav("settings")}
@@ -1655,12 +1560,7 @@ export function Dashboard({
           )}
         </nav>
         <div className="sidebar-bottom">
-          <button
-            className="user-card"
-            type="button"
-            onClick={() => openAccountProfile(session)}
-            aria-label="Open your account profile"
-          >
+          <div className="user-card">
             <ProfileAvatar account={session} size="small" />
             <div>
               <b>{session.name}</b>
@@ -1672,43 +1572,41 @@ export function Dashboard({
                     : "Student"}
               </small>
             </div>
-          </button>
+          </div>
           <button className="logout-button" type="button" onClick={onSignOut}>
+            <LogOut size={16} aria-hidden="true" />
             <span>Log out</span>
-            <span aria-hidden="true">↗</span>
           </button>
         </div>
       </aside>
-      <button
-        className={`sidebar-show-toggle${sidebarHidden ? " visible" : ""}`}
-        type="button"
-        onClick={() => setSidebarHidden(false)}
-        aria-label="Show navigation"
-        title="Show navigation"
-      >
-        ☰
-      </button>
 
       <main className="main-area">
         <header className="topbar">
+          <button
+            className="icon-button sidebar-toggle"
+            type="button"
+            onClick={() => setSidebarHidden((hidden) => !hidden)}
+            aria-label={sidebarHidden ? "Show navigation" : "Hide navigation"}
+            title={sidebarHidden ? "Show navigation" : "Hide navigation"}
+          >
+            {sidebarHidden ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+          </button>
           <div className="breadcrumb">
-            {isManager
-              ? rtl
-                ? "مدير البرنامج"
-                : "PROGRAM MANAGER"
-              : session.role === "mentor"
-                ? t.mentor
-                : rtl
-                  ? "مساحة الطالب"
-                  : "STUDENT WORKSPACE"}
+            <span className="breadcrumb-role">
+              {isManager
+                ? rtl
+                  ? "مدير البرنامج"
+                  : "PROGRAM MANAGER"
+                : session.role === "mentor"
+                  ? t.mentor
+                  : rtl
+                    ? "مساحة الطالب"
+                    : "STUDENT WORKSPACE"}
+            </span>
             <span>/</span>
             <b>{pageTitle}</b>
           </div>
           <div className="top-actions">
-            <span className="demo-tag">
-              <span />
-              {apiReadOnly ? "API data · read-only" : t.demo}
-            </span>
             <button
               className="icon-button theme-toggle"
               onClick={() => setTheme(theme === "light" ? "dark" : "light")}
@@ -1718,7 +1616,7 @@ export function Dashboard({
                   : "Switch to light mode"
               }
             >
-              {theme === "light" ? "☾" : "☀"}
+              {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
             </button>
             <div className="notification-wrap" ref={notificationWrap}>
               <button
@@ -1731,9 +1629,7 @@ export function Dashboard({
                 aria-expanded={notificationsOpen}
                 onClick={() => setNotificationsOpen((open) => !open)}
               >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
-                </svg>
+                <Bell size={19} aria-hidden="true" />
                 {unreadNotificationCount > 0 && (
                   <span className="notification-count" aria-hidden="true">
                     {unreadNotificationCount > 99
@@ -1797,15 +1693,6 @@ export function Dashboard({
                 </section>
               )}
             </div>
-            <button
-              className="topbar-profile-button"
-              type="button"
-              onClick={() => nav("profile")}
-              aria-label={rtl ? "فتح الملف الشخصي" : "Open profile"}
-              title={rtl ? "ملفي الشخصي" : "My profile"}
-            >
-              <ProfileAvatar account={session} size="small" />
-            </button>
           </div>
         </header>
 
@@ -1837,10 +1724,6 @@ export function Dashboard({
                 <span className="title-dot">.</span>
               </h1>
               <p>{pageSubtitle}</p>
-            </div>
-            <div className="date-chip">
-              <span>▦</span>
-              {todayLabel}
             </div>
           </div>
 
@@ -1949,18 +1832,6 @@ export function Dashboard({
               )}
             </div>
           )}
-          {section === "hierarchy" && (
-            <TeamHierarchy
-              manager={programManagerAccount}
-              mentors={mentorAccounts}
-              rows={rows}
-              accounts={accounts}
-              viewer={session}
-              lang={lang}
-              onOpenAccount={openHierarchyAccount}
-              onOpenStudent={openHierarchyStudent}
-            />
-          )}
           {section === "overview" &&
             session.role === "student" &&
             (can("viewProgress") ? (
@@ -2056,7 +1927,7 @@ export function Dashboard({
                     <p>
                       {rtl
                         ? "تابع نشاط الطلاب ومستوى تقدمهم."
-                        : "Track student activity and learning pace."}
+                        : "Pace, gaps, and 01Edu status come from the server. This screen does not recalculate them."}
                     </p>
                   </div>
                   <span className="cohort-pill">
@@ -2066,7 +1937,7 @@ export function Dashboard({
                 </div>
                 <div className="filter-bar">
                   <label className="search-box">
-                    <span>⌕</span>
+                    <Search size={16} aria-hidden="true" />
                     <input
                       ref={searchInput}
                       value={search}
@@ -2109,13 +1980,24 @@ export function Dashboard({
                         </option>
                       ))}
                   </select>
-                  {(search || status !== "ALL" || month !== "ALL") && (
+                  <select
+                    value={sourceStatus}
+                    onChange={(e) => setSourceStatus(e.target.value)}
+                    aria-label="01Edu status"
+                  >
+                    <option value="ALL">01Edu status: All</option>
+                    {[...new Set(visibleRows.map((student) => String(student.sourceStatus)))].sort().map((value) => (
+                      <option key={value} value={value}>{value}</option>
+                    ))}
+                  </select>
+                  {(search || status !== "ALL" || month !== "ALL" || sourceStatus !== "ALL") && (
                     <button
                       className="clear-filters"
                       onClick={() => {
                         setSearch("");
                         setStatus("ALL");
                         setMonth("ALL");
+                        setSourceStatus("ALL");
                       }}
                     >
                       {t.clear}
@@ -2147,8 +2029,6 @@ export function Dashboard({
                       <thead>
                         <tr>
                           <th>{t.student}</th>
-                          <th>{t.enrolled}</th>
-                          <th>{t.days}</th>
                           <th>{t.month}</th>
                           <th>{t.level}</th>
                           <th>{t.target}</th>
@@ -2158,8 +2038,8 @@ export function Dashboard({
                           <th />
                         </tr>
                       </thead>
-                      <tbody>
-                        {filtered.map((s) => (
+                    <tbody>
+                        {pageRows.map((s) => (
                           <StudentRow
                             key={s.studentId}
                             s={s}
@@ -2170,18 +2050,20 @@ export function Dashboard({
                         ))}
                         {filtered.length === 0 && (
                           <tr>
-                            <td colSpan={10}>
+                            <td colSpan={8}>
                               <div className="empty-state">
                                 <span>⌕</span>
                                 <b>{t.empty}</b>
                                 {(search ||
                                   status !== "ALL" ||
-                                  month !== "ALL") && (
+                                  month !== "ALL" ||
+                                  sourceStatus !== "ALL") && (
                                   <button
                                     onClick={() => {
                                       setSearch("");
                                       setStatus("ALL");
                                       setMonth("ALL");
+                                      setSourceStatus("ALL");
                                     }}
                                   >
                                     {t.clear}
@@ -2195,10 +2077,35 @@ export function Dashboard({
                     </table>
                   </div>
                 )}
+                {data && (
+                  <div className="student-mobile-list" aria-label={t.students}>
+                    {pageRows.map((student) => (
+                      <button className="student-mobile-card" key={student.studentId} type="button" onClick={() => setSelectedStudent(student)}>
+                        <span><b>{student.displayName || student.login}</b><small>@{student.login}</small></span>
+                        <span className={`status-badge ${student.paceStatus.toLowerCase()}`}><i />{statusNames[lang][student.paceStatus]}</span>
+                        <span>{t.month} <b>{student.curriculumMonth || "—"}</b></span>
+                        <span>{t.level} <b>{student.actualLevel}</b></span>
+                        <span>{t.target} <b>{student.minimumLevel ?? "—"} / {student.expectedLevel ?? "—"}</b></span>
+                        <span>Gap to min <b>{student.gapToMinimum ?? "—"}</b></span>
+                        <span>01Edu status <b>{student.sourceStatus || "—"}</b></span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {data && filtered.length > 25 && (
+                  <nav className="table-pagination" aria-label="Student pages">
+                    <span>{(studentPage - 1) * 25 + 1}–{Math.min(studentPage * 25, filtered.length)} of {filtered.length}</span>
+                    <div>
+                      <button type="button" disabled={studentPage <= 1} onClick={() => setStudentPage((page) => Math.max(1, page - 1))}>Previous</button>
+                      <b>{studentPage} / {studentPageCount}</b>
+                      <button type="button" disabled={studentPage >= studentPageCount} onClick={() => setStudentPage((page) => Math.min(studentPageCount, page + 1))}>Next</button>
+                    </div>
+                  </nav>
+                )}
                 <footer className="table-footer">
                   <span>
                     {data
-                      ? `${rtl ? "عرض" : "Showing"} ${filtered.length} ${rtl ? "من" : "of"} ${visibleRows.length} ${rtl ? "طلاب" : "students"}`
+                      ? `${rtl ? "عرض" : "Showing"} ${pageRows.length} ${rtl ? "من" : "of"} ${filtered.length} ${rtl ? "طلاب" : "students"}`
                       : " "}
                   </span>
                   <span>
@@ -2455,14 +2362,12 @@ export function Dashboard({
                 type="button"
                 onClick={() =>
                   nav(
-                    memberProfileReturnSection === "member-profile"
-                      ? "hierarchy"
-                      : memberProfileReturnSection,
+                    memberProfileReturnSection,
                   )
                 }
               >
                 <span aria-hidden="true">←</span>
-                {rtl ? "العودة" : `Back to ${memberProfileReturnLabel}`}
+                {rtl ? "العودة للطلاب" : "Students"}
               </button>
             </div>
           )}
@@ -2551,46 +2456,7 @@ export function Dashboard({
           <button
             type="button"
             key={item.label}
-            className={
-              item.label === "Pace"
-                ? section === "overview" && overviewTab === "progress"
-                  ? "active"
-                  : ""
-                : item.label === "Path"
-                  ? section === "overview" && overviewTab === "projects"
-                    ? "active"
-                    : ""
-                  : item.label === "Notes"
-                    ? section === "interventions" ||
-                      (section === "overview" && overviewTab === "followups")
-                      ? "active"
-                      : ""
-                    : item.label === "Overview"
-                      ? section === "overview"
-                        ? "active"
-                        : ""
-                      : item.label === "Students"
-                        ? section === "students"
-                          ? "active"
-                          : ""
-                        : item.label === "Manage"
-                          ? section === "manage"
-                            ? "active"
-                            : ""
-                          : item.label === "Accounts"
-                            ? section === "accounts"
-                              ? "active"
-                              : ""
-                            : item.label === "Team"
-                              ? section === "hierarchy"
-                                ? "active"
-                                : ""
-                              : item.label === "Settings"
-                                ? section === "settings"
-                                  ? "active"
-                                  : ""
-                                : ""
-            }
+            className={item.active?.() ? "active" : ""}
             onClick={item.action}
           >
             <span aria-hidden="true">{item.icon}</span>
@@ -2598,6 +2464,19 @@ export function Dashboard({
           </button>
         ))}
       </nav>
+      {mobileMoreOpen && isManager && (
+        <nav className="mobile-more-menu" aria-label={rtl ? "روابط إضافية" : "More pages"}>
+          {[
+            { label: t.team, icon: <UsersRound size={17} />, target: "team" as const },
+            { label: t.manage, icon: <UserRoundPlus size={17} />, target: "manage" as const },
+            { label: t.settings, icon: <SettingsIcon size={17} />, target: "settings" as const },
+          ].map((item) => (
+            <button key={item.target} type="button" onClick={() => { nav(item.target); setMobileMoreOpen(false); }}>
+              {item.icon}<span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
       {selectedStudent && session.role !== "student" && (
         <StudentDetails
           student={selectedStudent}

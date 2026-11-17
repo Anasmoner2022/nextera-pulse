@@ -2,9 +2,9 @@ import type { Language } from '../config';
 
 import type { ReactNode } from 'react';
 
-export function NavItem({ icon, label, active, onClick }: { icon: string; label: string; active: boolean; onClick: () => void ;}) { return <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}><span>{icon}</span><span className="nav-label">{label}</span></button> ;}
+export function NavItem({ icon, label, active, onClick }: { icon: ReactNode; label: string; active: boolean; onClick: () => void ;}) { return <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}><span aria-hidden="true">{icon}</span><span className="nav-label">{label}</span></button> ;}
 
-export function OverviewSectionTabs({ items, active, onChange, label }: { items: { id: string; label: string; icon: string }[]; active: string; onChange: (id: string) => void; label: string }) { return <nav className="overview-section-tabs" role="tablist" aria-label={label}>{items.map(item => <button type="button" role="tab" aria-selected={active === item.id} className={active === item.id ? 'active' : ''} key={item.id} onClick={() => onChange(item.id)}><span>{item.icon}</span>{item.label}</button>)}</nav>; }
+export function OverviewSectionTabs({ items, active, onChange, label }: { items: { id: string; label: string; icon: ReactNode }[]; active: string; onChange: (id: string) => void; label: string }) { return <nav className="overview-section-tabs" role="tablist" aria-label={label}>{items.map(item => <button type="button" role="tab" aria-selected={active === item.id} className={active === item.id ? 'active' : ''} key={item.id} onClick={() => onChange(item.id)}><span aria-hidden="true">{item.icon}</span>{item.label}</button>)}</nav>; }
 
 export function SettingRow({ title, description, action }: { title: string; description: string; action: ReactNode ;}) { return <div className="setting-row"><div><b>{title}</b><p>{description}</p></div>{action}</div> ;}
 

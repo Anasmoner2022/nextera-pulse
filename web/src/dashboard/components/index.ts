@@ -5,5 +5,4 @@ export * from './students';
 export * from './team';
 export * from './MentorWorkspaceView';
 export * from './project-progress';
-export * from './TeamHierarchy';
 export * from './StudentProfileInsights';

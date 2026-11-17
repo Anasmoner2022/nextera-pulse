@@ -92,25 +92,15 @@ export function ManagerOverview({
       note: ar ? "يحتاجون توزيعًا" : "Need an assignment",
       tone: unassigned.length ? "amber" : "green",
     },
-    {
-      icon: "↗",
-      label: ar ? "متابعات مسجلة" : "Recorded follow-ups",
-      value: interventions.length,
-      note: ar ? "إجراءات الفريق" : "Team actions",
-      tone: "violet",
-    },
   ];
   return (
     <section className="manager-overview">
       <div className="manager-overview-intro">
         <div>
-          <span className="eyebrow">
-            {ar ? "ملخص البرنامج" : "PROGRAM PULSE"}
-          </span>
           <h2>
             {ar
-              ? "صورة واضحة عن أداء الفريق"
-              : "A clear view of team performance"}
+              ? `${rows.length} طالبًا يتابعهم ${mentors.length} منتور.`
+              : `${rows.length} students across ${mentors.length} mentors.`}
           </h2>
           <p>
             {ar
@@ -285,17 +275,7 @@ function CohortPositionCurve({
   accounts: PulseAccount[];
   mentors: PulseAccount[];
 }) {
-  return (
-    <article className="analysis-card cohort-curve-card">
-      <CohortLevelHistogram
-        rows={rows}
-        accounts={accounts}
-        mentors={mentors}
-        lang={lang}
-        onSelectStudent={onSelect}
-      />
-    </article>
-  );
+  return <CohortLevelHistogram rows={rows} accounts={accounts} mentors={mentors} lang={lang} onSelectStudent={onSelect} />;
 }
 // Combine pace, project completion, and follow-up summaries for the active cohort scope.
 export function MentorAnalytics({

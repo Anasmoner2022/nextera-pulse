@@ -69,6 +69,73 @@ function studentInitials(student: StudentPaceRow) {
     .toUpperCase();
 }
 
+// Keep cohort cards compact while letting mentors open a student's full completed-project history.
+function CompletedProjectDetails({
+  studentId,
+  projects,
+  lang,
+}: {
+  studentId: number;
+  projects: { id: string | number; name: string }[];
+  lang: Language;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const ar = lang === "ar";
+  const latest = projects[projects.length - 1];
+  const listId = `completed-projects-${studentId}`;
+
+  return (
+    <div className="project-completion-details">
+      {latest ? (
+        <div className="project-latest-completion">
+          <span className="project-completion-check" aria-hidden="true">✓</span>
+          <span>
+            <small>{ar ? "آخر مشروع مكتمل" : "Latest completed project"}</small>
+            <b>{latest.name}</b>
+          </span>
+        </div>
+      ) : (
+        <p className="project-no-completions">
+          {ar ? "لم يُكمل هذا الطالب مشروعًا بعد." : "No completed projects yet."}
+        </p>
+      )}
+      {projects.length > 1 && (
+        <>
+          <button
+            type="button"
+            className="project-completion-toggle"
+            aria-expanded={expanded}
+            aria-controls={listId}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded
+              ? ar
+                ? "إخفاء المشاريع المكتملة"
+                : "Hide completed projects"
+              : ar
+                ? `عرض كل المشاريع المكتملة (${projects.length})`
+                : `View all completed projects (${projects.length})`}
+            <span aria-hidden="true">{expanded ? "−" : "+"}</span>
+          </button>
+          {expanded && (
+            <ul className="project-completed-list" id={listId}>
+              {projects.map((project, index) => (
+                <li key={project.id}>
+                  <span>{project.name}</span>
+                  {project.id === latest?.id && (
+                    <small>{ar ? "الأحدث" : "Latest"}</small>
+                  )}
+                  {project.id !== latest?.id && <small>{index + 1}</small>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // Render the project matrix for one student or a cohort, with mentor-aware filtering.
 export function ProjectProgress({
   rows,
@@ -298,25 +365,36 @@ export function ProjectProgress({
                       }}
                     />
                   </div>
-                  <div className="project-card-steps">
-                    {projects.map((project, index) => {
-                      const complete = index < done;
-                      return (
-                        <div
-                          className="project-step"
-                          key={project.id}
-                          title={`${project.name[lang]}: ${complete ? (ar ? "مكتمل" : "Completed") : ar ? "لم يكتمل" : "Not completed"}`}
-                        >
-                          <span
-                            className={`project-square ${complete ? "complete" : ""}`}
+                  {isCohort ? (
+                    <CompletedProjectDetails
+                      studentId={student.studentId}
+                      projects={projects.slice(0, done).map((project) => ({
+                        id: project.id,
+                        name: project.name[lang],
+                      }))}
+                      lang={lang}
+                    />
+                  ) : (
+                    <div className="project-card-steps">
+                      {projects.map((project, index) => {
+                        const complete = index < done;
+                        return (
+                          <div
+                            className="project-step"
+                            key={project.id}
+                            title={`${project.name[lang]}: ${complete ? (ar ? "مكتمل" : "Completed") : ar ? "لم يكتمل" : "Not completed"}`}
                           >
-                            {complete ? "✓" : ""}
-                          </span>
-                          <small>{`0${index + 1} ${project.name[lang]}`}</small>
-                        </div>
-                      );
-                    })}
-                  </div>
+                            <span
+                              className={`project-square ${complete ? "complete" : ""}`}
+                            >
+                              {complete ? "✓" : ""}
+                            </span>
+                            <small>{`0${index + 1} ${project.name[lang]}`}</small>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </article>
               );
             })}
@@ -807,23 +885,33 @@ function LiveProjectProgress({
                   <div className="project-student-meter">
                     <i style={{ width: `${percent}%` }} />
                   </div>
-                  <div className="project-card-steps">
-                    {projects.map((project, index) => {
-                      const complete = student.done[index];
-                      return (
-                        <div
-                          className="project-step"
-                          key={project.id}
-                          title={`${project.name}: ${complete ? (ar ? "مكتمل" : "Done") : (ar ? "غير مكتمل" : "Not done")}`}
-                        >
-                          <span className={`project-square ${complete ? "complete" : ""}`}>
-                            {complete ? "✓" : ""}
-                          </span>
-                          <small>{`P${index + 1}`}</small>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {view === "cohort" ? (
+                    <CompletedProjectDetails
+                      studentId={student.studentId}
+                      projects={projects
+                        .filter((_, index) => student.done[index])
+                        .map((project) => ({ id: project.id, name: project.name }))}
+                      lang={lang}
+                    />
+                  ) : (
+                    <div className="project-card-steps">
+                      {projects.map((project, index) => {
+                        const complete = student.done[index];
+                        return (
+                          <div
+                            className="project-step"
+                            key={project.id}
+                            title={`${project.name}: ${complete ? (ar ? "مكتمل" : "Done") : (ar ? "غير مكتمل" : "Not done")}`}
+                          >
+                            <span className={`project-square ${complete ? "complete" : ""}`}>
+                              {complete ? "✓" : ""}
+                            </span>
+                            <small>{`P${index + 1}`}</small>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   {view === "cohort" && pace && onSelectStudent && (
                     <button
                       type="button"

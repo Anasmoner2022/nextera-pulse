@@ -12,17 +12,17 @@
 .profile-avatar.small {
   width:34px;
   height:34px;
-  font-size:10px
+  font-size:var(--text-xs)
 }
 .profile-avatar.medium {
   width:44px;
   height:44px;
-  font-size:13px
+  font-size:var(--text-sm)
 }
 .profile-avatar.large {
   width:94px;
   height:94px;
-  font-size:25px;
+  font-size:var(--text-xl);
   border:4px solid var(--surface);
   box-shadow:0 5px 20px #12352325
 }
@@ -49,7 +49,7 @@
   border:0;
   background:none;
   color:#71817e;
-  font-size:18px
+  font-size:var(--text-lg)
 }
 .auth-page .auth-story {
   position:relative
@@ -81,7 +81,7 @@
   border-radius:8px;
   background:#f7fbf9;
   color:#287e6d;
-  font-size:10px;
+  font-size:var(--text-xs);
   font-weight:600;
   transition:transform .2s,background .2s,box-shadow .2s
 }
@@ -111,10 +111,10 @@
   min-width:120px
 }
 .account-identity b {
-  font-size:11px
+  font-size:var(--text-xs)
 }
 .account-identity small {
-  font-size:9px;
+  font-size:var(--text-xs);
   color:var(--muted);
   overflow-wrap:anywhere
 }
@@ -123,7 +123,7 @@
   align-items:center;
   padding:5px 9px;
   border-radius:20px;
-  font-size:9px;
+  font-size:var(--text-xs);
   font-weight:700;
   background:#eef3f1;
   color:#60726d
@@ -137,7 +137,7 @@
   color:#6879b0
 }
 .permission-count {
-  font-size:9px;
+  font-size:var(--text-xs);
   color:var(--muted);
   white-space:nowrap
 }
@@ -146,7 +146,7 @@
   gap:6px
 }
 .account-actions .setting-action {
-  font-size:9px;
+  font-size:var(--text-xs);
   padding:7px 9px
 }
 .account-form-card {
@@ -164,7 +164,7 @@
 .permissions-field legend {
   padding:0 5px;
   color:var(--text);
-  font-size:10px;
+  font-size:var(--text-xs);
   font-weight:700
 }
 .permissions-field label {
@@ -172,7 +172,7 @@
   align-items:flex-start;
   gap:7px;
   line-height:1.45;
-  font-size:9px
+  font-size:var(--text-xs)
 }
 .permissions-field input {
   width:14px;
@@ -232,7 +232,7 @@
 }
 .profile-identity p {
   color:#738580;
-  font-size:10px;
+  font-size:var(--text-xs);
   margin:0
 }
 .profile-identity>.role-pill {
@@ -254,7 +254,7 @@
   border-radius:50%;
   background:linear-gradient(145deg,#32b99d,#168c79);
   color:white;
-  font-size:17px;
+  font-size:var(--text-lg);
   line-height:1;
   box-shadow:0 4px 12px #13372b30;
   transition:transform .2s ease,box-shadow .2s ease,filter .2s ease
@@ -289,8 +289,8 @@
   animation:dialog-in 420ms cubic-bezier(.2,.8,.2,1) both
 }
 .crop-dialog-header { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
-.crop-dialog-header h2 { margin:5px 0 6px; font-size:21px; }
-.crop-dialog-header p { margin:0; color:var(--muted); font-size:12px; line-height:1.6; }
+.crop-dialog-header h2 { margin:5px 0 6px; font-size:var(--text-lg); }
+.crop-dialog-header p { margin:0; color:var(--muted); font-size:var(--text-sm); line-height:1.6; }
 .crop-dialog-header .detail-close { flex:0 0 auto; }
 .crop-workspace { display:grid; justify-items:center; gap:19px; padding:23px 0 20px; }
 .crop-frame {
@@ -311,12 +311,12 @@
 }
 .crop-frame:active { cursor:grabbing; }
 .crop-frame img { position:absolute; top:50%; left:50%; max-width:none; pointer-events:none; user-select:none; }
-.crop-frame-hint { position:absolute; right:50%; bottom:10px; padding:4px 8px; border:1px solid rgb(255 255 255 / 22%); border-radius:999px; background:rgb(18 37 35 / 58%); color:white; font-size:8px; font-weight:700; letter-spacing:.7px; white-space:nowrap; transform:translateX(50%); pointer-events:none; }
+.crop-frame-hint { position:absolute; right:50%; bottom:10px; padding:4px 8px; border:1px solid rgb(255 255 255 / 22%); border-radius:999px; background:rgb(18 37 35 / 58%); color:white; font-size:var(--text-xs); font-weight:700; letter-spacing:.7px; white-space:nowrap; transform:translateX(50%); pointer-events:none; }
 .crop-controls { display:grid; gap:8px; width:min(300px,100%); }
-.crop-controls label { display:flex; justify-content:space-between; gap:12px; color:var(--text); font-size:11px; font-weight:700; }
+.crop-controls label { display:flex; justify-content:space-between; gap:12px; color:var(--text); font-size:var(--text-xs); font-weight:700; }
 .crop-controls label span { color:var(--accent-strong); font-variant-numeric:tabular-nums; }
 .crop-controls input[type=range] { width:100%; accent-color:#20ad91; }
-.crop-controls small { color:var(--muted); font-size:10px; text-align:center; }
+.crop-controls small { color:var(--muted); font-size:var(--text-xs); text-align:center; }
 .crop-actions { display:flex; justify-content:flex-end; gap:9px; padding-top:16px; border-top:1px solid var(--line); }
 html[data-theme=dark] .crop-frame { background-color:#243735; background-image:linear-gradient(45deg,#314643 25%,transparent 25%),linear-gradient(-45deg,#314643 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#314643 75%),linear-gradient(-45deg,transparent 75%,#314643 75%); }
 @media(max-width:520px) {
@@ -364,7 +364,7 @@ html[data-theme=dark] .crop-frame { background-color:#243735; background-image:l
   display:grid;
   gap:7px;
   margin-top:13px;
-  font-size:10px;
+  font-size:var(--text-xs);
   font-weight:600;
   color:var(--muted)
 }
@@ -376,7 +376,7 @@ html[data-theme=dark] .crop-frame { background-color:#243735; background-image:l
   color:var(--text);
   padding:10px 11px;
   font:inherit;
-  font-size:10px;
+  font-size:var(--text-xs);
   outline:none
 }
 .profile-about input:focus,.profile-about textarea:focus,.compose-post textarea:focus,.comment-compose input:focus {
@@ -389,7 +389,7 @@ html[data-theme=dark] .crop-frame { background-color:#243735; background-image:l
   line-height:1.6
 }
 .profile-bio {
-  font-size:11px;
+  font-size:var(--text-xs);
   line-height:1.8;
   color:var(--muted)
 }
@@ -399,7 +399,7 @@ html[data-theme=dark] .crop-frame { background-color:#243735; background-image:l
   border-inline-start:3px solid #39b99b;
   background:var(--soft);
   border-radius:7px;
-  font-size:11px;
+  font-size:var(--text-xs);
   line-height:1.7;
   color:var(--text)
 }
@@ -436,15 +436,15 @@ html[data-theme=dark] .crop-frame { background-color:#243735; background-image:l
   gap:4px
 }
 .post-head b {
-  font-size:10px
+  font-size:var(--text-xs)
 }
 .post-head small {
-  font-size:8px;
+  font-size:var(--text-xs);
   color:var(--muted)
 }
 .profile-post>p {
   margin:13px 0;
-  font-size:11px;
+  font-size:var(--text-xs);
   line-height:1.7;
   white-space:pre-wrap;
   overflow-wrap:anywhere
@@ -459,7 +459,7 @@ html[data-theme=dark] .crop-frame { background-color:#243735; background-image:l
   background:var(--soft);
   padding:8px 10px;
   border-radius:7px;
-  font-size:9px;
+  font-size:var(--text-xs);
   line-height:1.5
 }
 .profile-comment b {
@@ -479,7 +479,7 @@ html[data-theme=dark] .crop-frame { background-color:#243735; background-image:l
   border:0;
   background:transparent;
   color:#168d7e;
-  font-size:9px;
+  font-size:var(--text-xs);
   font-weight:700;
   white-space:nowrap
 }
@@ -512,7 +512,7 @@ html[data-theme=dark] .crop-frame { background-color:#243735; background-image:l
   border-radius:10px;
   background:var(--soft);
   color:var(--text);
-  font-size:10px;
+  font-size:var(--text-xs);
   font-weight:700
 }
 .profile-notes-list {
@@ -536,19 +536,19 @@ html[data-theme=dark] .crop-frame { background-color:#243735; background-image:l
   border-radius:10px;
   background:#e8f7f0;
   color:#269d7e;
-  font-size:14px
+  font-size:var(--text-md)
 }
 .profile-note>div { min-width:0; flex:1 }
 .profile-note p {
   margin:0 0 8px;
   color:var(--text);
-  font-size:11px;
+  font-size:var(--text-xs);
   line-height:1.7;
   white-space:pre-wrap;
   overflow-wrap:anywhere
 }
-.profile-note small { color:var(--muted); font-size:9px; line-height:1.6 }
-.profile-notes-empty { margin:0; padding:20px 21px; color:var(--muted); font-size:10px }
+.profile-note small { color:var(--muted); font-size:var(--text-xs); line-height:1.6 }
+.profile-notes-empty { margin:0; padding:20px 21px; color:var(--muted); font-size:var(--text-xs) }
 html[data-theme=dark] .profile-note-marker { background:#1b372d; color:#83d5b2 }
 .profile-quote>span {
   font:700 45px Georgia;
@@ -560,11 +560,11 @@ html[data-theme=dark] .profile-note-marker { background:#1b372d; color:#83d5b2 }
   color:var(--text)
 }
 .profile-quote small {
-  font-size:9px;
+  font-size:var(--text-xs);
   color:var(--muted)
 }
 .profile-people p {
-  font-size:10px;
+  font-size:var(--text-xs);
   color:var(--muted);
   line-height:1.6
 }
@@ -579,7 +579,7 @@ html[data-theme=dark] .profile-note-marker { background:#1b372d; color:#83d5b2 }
   border-radius:9px;
   background:#effaf4;
   color:#286d58;
-  font-size:10px;
+  font-size:var(--text-xs);
   box-shadow:0 10px 30px #11291c18;
   animation:profile-enter .2s ease-out
 }
@@ -592,7 +592,7 @@ html[data-theme=dark] .profile-note-marker { background:#1b372d; color:#83d5b2 }
   text-align:center
 }
 .access-empty>span {
-  font-size:30px;
+  font-size:var(--text-xl);
   color:#37b99a
 }
 .access-empty h2 {
@@ -600,7 +600,7 @@ html[data-theme=dark] .profile-note-marker { background:#1b372d; color:#83d5b2 }
 }
 .access-empty p {
   color:var(--muted);
-  font-size:10px
+  font-size:var(--text-xs)
 }
 @keyframes profile-enter {
   from {
@@ -700,7 +700,7 @@ html[dir=rtl] .auth-story h1 {
     height:74px
   }
 .profile-identity h2 {
-    font-size:19px
+    font-size:var(--text-lg)
   }
 .profile-controls {
     justify-content:flex-start
@@ -748,10 +748,10 @@ html[dir=rtl] .auth-story h1 {
   background:transparent;
   color:var(--text);
   font:inherit;
-  font-size:10px
+  font-size:var(--text-xs)
 }
 .account-filter small {
-  font-size:8px;
+  font-size:var(--text-xs);
   white-space:nowrap
 }
 .content>.page-heading {
@@ -933,8 +933,13 @@ html[data-theme=dark] .account-filter {
   border-color:color-mix(in srgb,#39b99a 24%,var(--line));
   background:linear-gradient(115deg,color-mix(in srgb,#39c4a2 8%,var(--surface)),var(--surface) 72%);
 }
-.profile-viewed-quote>.eyebrow { color:#279b82; font-size:9px; font-weight:800; letter-spacing:.7px; }
+.profile-viewed-quote>.eyebrow { color:#279b82; font-size:var(--text-xs); font-weight:800; letter-spacing:.7px; }
 .profile-viewed-quote blockquote { margin:0; color:var(--text); font:600 15px/1.75 Manrope,'Cairo',sans-serif; overflow-wrap:anywhere; }
-.profile-viewed-quote>small { color:var(--muted); font-size:9px; }
+.profile-viewed-quote>small { color:var(--muted); font-size:var(--text-xs); }
 html[data-theme=dark] .profile-viewed-quote { border-color:#2d4a40; background:linear-gradient(115deg,#1c332e,var(--surface) 72%); }
-@media(max-width:520px) { .profile-viewed-quote { padding:15px 16px; } .profile-viewed-quote blockquote { font-size:13px; } }
+@media(max-width:520px) { .profile-viewed-quote { padding:15px 16px; } .profile-viewed-quote blockquote { font-size:var(--text-sm); } }
+.member-profile-back { margin:0 0 16px; }
+.member-profile-back>button { display:inline-flex; align-items:center; gap:8px; padding:8px 11px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--muted); font:inherit; font-size:var(--text-md); font-weight:700; cursor:pointer; transition:color 180ms ease,border-color 180ms ease,background 180ms ease,transform 180ms ease; }
+.member-profile-back>button:hover { border-color:color-mix(in srgb,#29b394 35%,var(--line)); background:color-mix(in srgb,#37c4a2 7%,var(--surface)); color:#128b76; transform:translateX(-2px); }
+.member-profile-back>button:focus-visible { outline:2px solid #29ad91; outline-offset:2px; }
+html[dir="rtl"] .member-profile-back>button:hover { transform:translateX(2px); }
