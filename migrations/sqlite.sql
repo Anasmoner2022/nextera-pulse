@@ -1,5 +1,5 @@
 -- Nextera Pulse SQLite DDL
--- Sprint 1 Core Schema & Operational Tables
+-- Sprint 1 Core Schema & Operational Tables + Live Sync Tables
 
 CREATE TABLE IF NOT EXISTS students (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -8,8 +8,9 @@ CREATE TABLE IF NOT EXISTS students (
     first_name TEXT,
     last_name TEXT,
     email TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    source_role TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS source_events (
@@ -20,7 +21,7 @@ CREATE TABLE IF NOT EXISTS source_events (
     type TEXT,
     start_at TEXT,
     end_at TEXT,
-    last_synced_at TEXT
+    last_synced_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS student_events (
@@ -31,7 +32,7 @@ CREATE TABLE IF NOT EXISTS student_events (
     enrolled_at TEXT NOT NULL,
     current_level REAL NOT NULL DEFAULT 0,
     audit_ratio REAL NOT NULL DEFAULT 0,
-    last_synced_at TEXT,
+    last_synced_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (student_id, event_id)
 );
 
@@ -42,16 +43,29 @@ CREATE TABLE IF NOT EXISTS status_policy (
     description TEXT
 );
 
+CREATE TABLE IF NOT EXISTS curriculum_timeline_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approved', 'retired')),
+    notes TEXT NOT NULL DEFAULT '',
+    approved_by TEXT,
+    approved_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (event_id, label)
+);
+
 CREATE TABLE IF NOT EXISTS curriculum_timeline (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id INTEGER NOT NULL,
+    version_id INTEGER NOT NULL REFERENCES curriculum_timeline_versions(id) ON DELETE CASCADE,
     month INTEGER NOT NULL,
     min_level REAL NOT NULL,
     expected_level REAL NOT NULL,
     checkpoint_level REAL NOT NULL DEFAULT 0,
     rank INTEGER DEFAULT 0,
     notes TEXT,
-    UNIQUE (event_id, month)
+    UNIQUE (version_id, month)
 );
 
 CREATE TABLE IF NOT EXISTS student_source_records (
@@ -93,7 +107,11 @@ CREATE TABLE IF NOT EXISTS mentor_assignments (
     mentor_name TEXT NOT NULL,
     starts_at TEXT NOT NULL,
     ends_at TEXT,
-    is_primary INTEGER NOT NULL DEFAULT 1
+    is_primary INTEGER NOT NULL DEFAULT 1,
+    reason TEXT NOT NULL DEFAULT '',
+    assigned_by INTEGER REFERENCES students(id) ON DELETE SET NULL,
+    ended_by INTEGER REFERENCES students(id) ON DELETE SET NULL,
+    end_reason TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS interventions (
@@ -107,7 +125,10 @@ CREATE TABLE IF NOT EXISTS interventions (
     due_at TEXT,
     resolved_at TEXT,
     outcome TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    author_role TEXT NOT NULL DEFAULT '',
+    deleted_at TEXT,
+    deleted_by INTEGER REFERENCES students(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS sync_runs (
@@ -123,3 +144,103 @@ CREATE TABLE IF NOT EXISTS sync_runs (
 CREATE INDEX IF NOT EXISTS idx_student_events_cohort ON student_events(cohort_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_date ON student_metric_snapshots(snapshot_date);
 CREATE INDEX IF NOT EXISTS idx_snapshots_status ON student_metric_snapshots(pace_status);
+
+CREATE TABLE IF NOT EXISTS learning_objects (
+    source_object_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    type TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL DEFAULT '',
+    author_login TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS learning_progress (
+    source_progress_id INTEGER PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    source_user_id INTEGER NOT NULL,
+    event_id INTEGER,
+    object_id INTEGER,
+    path TEXT NOT NULL DEFAULT '',
+    is_done INTEGER NOT NULL DEFAULT 0,
+    grade REAL,
+    group_id INTEGER,
+    updated_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_learning_progress_student ON learning_progress(student_id, is_done);
+CREATE INDEX IF NOT EXISTS idx_learning_progress_object ON learning_progress(object_id);
+
+CREATE TABLE IF NOT EXISTS learning_results (
+    source_result_id INTEGER PRIMARY KEY,
+    student_id INTEGER,
+    source_user_id INTEGER NOT NULL,
+    object_id INTEGER,
+    path TEXT NOT NULL DEFAULT '',
+    grade REAL,
+    type TEXT NOT NULL DEFAULT '',
+    is_last INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_learning_results_student ON learning_results(student_id);
+
+CREATE TABLE IF NOT EXISTS learning_groups (
+    source_group_id INTEGER PRIMARY KEY,
+    event_id INTEGER,
+    object_id INTEGER,
+    path TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    captain_login TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS learning_audits (
+    source_audit_id INTEGER PRIMARY KEY,
+    group_id INTEGER,
+    auditor_login TEXT NOT NULL DEFAULT '',
+    grade REAL,
+    closure_type TEXT NOT NULL DEFAULT '',
+    audited_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS learning_transactions (
+    source_transaction_id INTEGER PRIMARY KEY,
+    student_id INTEGER,
+    source_user_id INTEGER NOT NULL,
+    object_id INTEGER,
+    path TEXT NOT NULL DEFAULT '',
+    type TEXT NOT NULL DEFAULT '',
+    amount REAL NOT NULL DEFAULT 0,
+    is_bonus INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_learning_tx_student ON learning_transactions(student_id);
+
+CREATE TABLE IF NOT EXISTS cohort_labels (
+    source_label_id INTEGER PRIMARY KEY,
+    event_id INTEGER,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS cohort_label_users (
+    source_id INTEGER PRIMARY KEY,
+    label_id INTEGER NOT NULL,
+    source_user_id INTEGER NOT NULL,
+    label_name TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_label_users_user ON cohort_label_users(source_user_id, label_id);
+
+CREATE TABLE IF NOT EXISTS app_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_hash TEXT NOT NULL UNIQUE,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    user_agent TEXT NOT NULL DEFAULT '',
+    ip TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_sessions_expires ON app_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_app_sessions_student ON app_sessions(student_id);

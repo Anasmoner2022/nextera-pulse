@@ -23,7 +23,7 @@ func (db *DB) InterventionAuthor(ctx context.Context, id int64) (int64, error) {
 // SoftDeleteIntervention hides a follow-up from every list, recording who
 // deleted it and when. The row stays for the record.
 func (db *DB) SoftDeleteIntervention(ctx context.Context, id, deletedBy int64) error {
-	res, err := db.ExecContext(ctx, `UPDATE interventions SET deleted_at = NOW(), deleted_by = $2
+	res, err := db.ExecContext(ctx, `UPDATE interventions SET deleted_at = CURRENT_TIMESTAMP, deleted_by = $2
 		WHERE id = $1 AND deleted_at IS NULL`, id, nullableID(deletedBy))
 	if err != nil {
 		return err

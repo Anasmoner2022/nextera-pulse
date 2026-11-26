@@ -30,3 +30,6 @@ Thumbs.db
 
 # Local DB / Docker
 postgres-data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
