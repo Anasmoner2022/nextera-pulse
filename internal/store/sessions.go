@@ -32,13 +32,15 @@ func (db *DB) CreateSession(ctx context.Context, studentID int64, ttl time.Durat
 	if len(userAgent) > 300 {
 		userAgent = userAgent[:300]
 	}
-	_, err := db.ExecContext(ctx, db.Rebind(`INSERT INTO app_sessions (token_hash, student_id, expires_at, user_agent, ip) VALUES (?, ?, ?, ?, ?)`),
-		hashToken(token), studentID, expires, userAgent, ip)
+	now := time.Now().UTC()
+	_, err := db.ExecContext(ctx, db.Rebind(`INSERT INTO app_sessions (token_hash, student_id, expires_at, user_agent, ip, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)`),
+		hashToken(token), studentID, FormatTime(expires), userAgent, ip, FormatTime(now), FormatTime(now))
 	if err != nil {
 		return "", time.Time{}, err
 	}
 	// Opportunistic cleanup; failures do not affect the new session.
-	_, _ = db.ExecContext(ctx, `DELETE FROM app_sessions WHERE expires_at < NOW() - INTERVAL '1 day'`)
+	cutoff := FormatTime(now.Add(-24 * time.Hour))
+	_, _ = db.ExecContext(ctx, db.Rebind(`DELETE FROM app_sessions WHERE expires_at < ?`), cutoff)
 	return token, expires, nil
 }
 
@@ -51,23 +53,24 @@ func (db *DB) SessionPerson(ctx context.Context, token string) (*StaffMember, ti
 	hash := hashToken(token)
 	var member StaffMember
 	var firstName, lastName string
-	var expires time.Time
+	var expiresFlex FlexibleTime
 	err := db.QueryRowContext(ctx, db.Rebind(`SELECT s.id, s.source_user_id, s.login, COALESCE(s.first_name, ''), COALESCE(s.last_name, ''), COALESCE(s.email, ''), COALESCE(s.source_role, ''), a.expires_at
 		FROM app_sessions a JOIN students s ON s.id = a.student_id
-		WHERE a.token_hash = ? AND a.expires_at > NOW()`), hash).
-		Scan(&member.StudentID, &member.SourceUserID, &member.Login, &firstName, &lastName, &member.Email, &member.SourceRole, &expires)
+		WHERE a.token_hash = ? AND a.expires_at > ?`), hash, FormatTime(time.Now().UTC())).
+		Scan(&member.StudentID, &member.SourceUserID, &member.Login, &firstName, &lastName, &member.Email, &member.SourceRole, &expiresFlex)
 	if err == sql.ErrNoRows {
 		return nil, time.Time{}, ErrNoSession
 	}
 	if err != nil {
 		return nil, time.Time{}, err
 	}
+	expires := expiresFlex.Time
 	member.DisplayName = strings.TrimSpace(firstName + " " + lastName)
 	if member.DisplayName == "" {
 		member.DisplayName = member.Login
 	}
 	member.PulseRole = PulseRoleFor(member.SourceRole)
-	_, _ = db.ExecContext(ctx, db.Rebind(`UPDATE app_sessions SET last_seen_at = NOW() WHERE token_hash = ? AND last_seen_at < NOW() - INTERVAL '1 minute'`), hash)
+	_, _ = db.ExecContext(ctx, db.Rebind(`UPDATE app_sessions SET last_seen_at = ? WHERE token_hash = ?`), FormatTime(time.Now().UTC()), hash)
 	return &member, expires, nil
 }
 

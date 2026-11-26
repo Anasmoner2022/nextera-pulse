@@ -90,12 +90,13 @@ func (db *DB) SeedCurriculumTimeline(ctx context.Context, eventID int) error {
 func (db *DB) ActiveTimelineVersion(ctx context.Context, eventID int) (TimelineVersion, bool, error) {
 	var v TimelineVersion
 	var approvedBy sql.NullString
-	var approvedAt sql.NullTime
+	var approvedAt FlexibleTime
+	var createdAt FlexibleTime
 	err := db.QueryRowContext(ctx, `SELECT id, event_id, label, status, notes, approved_by, approved_at, created_at
 		FROM curriculum_timeline_versions
 		WHERE event_id = $1 AND status IN ('approved', 'draft')
 		ORDER BY (status = 'approved') DESC, created_at DESC, id DESC
-		LIMIT 1`, eventID).Scan(&v.ID, &v.EventID, &v.Label, &v.Status, &v.Notes, &approvedBy, &approvedAt, &v.CreatedAt)
+		LIMIT 1`, eventID).Scan(&v.ID, &v.EventID, &v.Label, &v.Status, &v.Notes, &approvedBy, &approvedAt, &createdAt)
 	if err == sql.ErrNoRows {
 		return TimelineVersion{EventID: eventID}, false, nil
 	}
@@ -104,10 +105,11 @@ func (db *DB) ActiveTimelineVersion(ctx context.Context, eventID int) (TimelineV
 	}
 	v.Approved = v.Status == TimelineApproved
 	v.ApprovedBy = approvedBy.String
-	if approvedAt.Valid {
+	if !approvedAt.Time.IsZero() {
 		t := approvedAt.Time
 		v.ApprovedAt = &t
 	}
+	v.CreatedAt = createdAt.Time
 	return v, true, nil
 }
 
