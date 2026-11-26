@@ -2610,16 +2610,20 @@ html[data-theme="dark"] .project-completion-check {
 .manager-metric small,.manager-metric span { white-space:normal; }
 
 @media (max-width: 760px) {
+  .manager-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .manager-metric { align-items:flex-start; min-width:0; }
+  .manager-metric>div { min-width:0; overflow:hidden; }
+  .manager-metric small,.manager-metric>div>span { overflow:hidden; white-space:normal; overflow-wrap:break-word; }
   .table-pagination { align-items:flex-start; flex-direction:column; padding-inline:14px; }
   .table-panel>.table-scroll { display:none; }
   .student-mobile-list { display:grid; gap:10px; padding:0 14px; }
-  .student-mobile-card { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--text); text-align:start; }
-  .student-mobile-card>span { display:grid; align-content:start; gap:4px; min-width:0; color:var(--muted); font-size:var(--text-xs); }
-  .student-mobile-card>span:first-child { grid-column:1/-1; }
-  .student-mobile-card>span:first-child b { color:var(--text); font-size:var(--text-md); }
-  .student-mobile-card>span:first-child small { color:var(--muted); font-size:var(--text-xs); }
-  .student-mobile-card>span b { color:var(--text); overflow-wrap:anywhere; }
-  .student-mobile-card .status-badge { justify-self:start; }
+  .student-mobile-card { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:0 12px; padding:14px 14px 6px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--text); text-align:start; }
+  .student-mobile-card>span { display:flex; align-items:baseline; justify-content:space-between; gap:12px; grid-column:1/-1; min-width:0; padding:10px 0; border-top:1px solid var(--line); color:var(--muted); font-size:var(--text-xs); }
+  .student-mobile-card>span:first-child { grid-column:1; grid-row:1; display:grid; align-content:center; gap:3px; padding:0 0 12px; border-top:0; }
+  .student-mobile-card>span:first-child b { color:var(--text); font-size:var(--text-md); overflow-wrap:anywhere; }
+  .student-mobile-card>span:first-child small { color:var(--muted); font-size:var(--text-xs); overflow-wrap:anywhere; }
+  .student-mobile-card>span b { color:var(--text); font-size:var(--text-sm); font-weight:700; text-align:end; white-space:nowrap; }
+  .student-mobile-card .status-badge { grid-column:2; grid-row:1; align-self:center; justify-self:end; display:inline-flex; margin-bottom:12px; }
   .team-summary-strip { gap:8px; }
   .team-summary-strip article { padding:12px; }
   .team-mentor-grid { grid-template-columns:1fr; }
@@ -2657,4 +2661,68 @@ html[data-theme="dark"] .project-completion-check {
   .mobile-bottom-nav button { flex:1 1 0; min-width:0; }
   .overview-section-tabs { flex-wrap:wrap; overflow:visible; }
   .overview-section-tabs>button { flex:1 1 auto; }
+}
+
+/* Pin the mobile header and bottom bar. Only the workspace scrolls. */
+@media (max-width: 760px) {
+  html:has(.app-shell),
+  body:has(.app-shell) {
+    height: 100%;
+    overflow: hidden;
+  }
+  .app-shell {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+  .app-shell > .main-area {
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    padding-top: 60px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .app-shell > .main-area > .topbar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 70;
+    height: 60px;
+    min-height: 60px;
+    padding-inline: 16px 22px;
+    animation: none;
+    transform: none;
+  }
+  .app-shell > .main-area > .topbar .notification .notification-count {
+    top: -2px;
+    right: 0;
+  }
+  html[dir="rtl"] .app-shell > .main-area > .topbar .notification .notification-count {
+    right: auto;
+    left: 0;
+  }
+  .app-shell > .mobile-bottom-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom));
+    animation: none;
+    transform: none;
+  }
+  .app-shell > .mobile-bottom-nav button > b {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
+  }
+  .app-shell > .main-area > .content {
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+  }
 }
